@@ -40,7 +40,7 @@ jobs:
             echo "ANDROID_KEYSTORE_BASE64 is not set."
             exit 1
           fi
-          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/release.keystore
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/release.keystore
 
       - name: Create key.properties
         env:
