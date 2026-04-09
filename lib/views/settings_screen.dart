@@ -18,6 +18,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late Future<PackageInfo> _packageInfoFuture;
   bool _syncing = false;
   bool _checkingUpdate = false;
+  DateTime? _lastUpdateCheckedAt;
   final _syncService = SyncService();
   final _versionCheckService = VersionCheckService();
 
@@ -27,6 +28,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final settings = Provider.of<SettingsProvider>(context, listen: false);
     _urlController = TextEditingController(text: settings.serverUrl);
     _packageInfoFuture = PackageInfo.fromPlatform();
+    _loadLastCheckedAt();
+  }
+
+  Future<void> _loadLastCheckedAt() async {
+    final checkedAt = await _versionCheckService.getLastCheckedAt();
+    if (!mounted) return;
+    setState(() {
+      _lastUpdateCheckedAt = checkedAt;
+    });
   }
 
   @override
@@ -69,18 +79,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 value: settings.autoCheckUpdateOnStartup,
                 onChanged: (v) => settings.setAutoCheckUpdateOnStartup(v),
               ),
-              FutureBuilder<DateTime?>(
-                future: _versionCheckService.getLastCheckedAt(),
-                builder: (context, snapshot) {
-                  final checked = snapshot.data;
-                  final text = checked == null
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Text(
+                  _lastUpdateCheckedAt == null
                       ? '最終確認: 未実施'
-                      : '最終確認: ${checked.toLocal().toString().substring(0, 19)}';
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Text(text),
-                  );
-                },
+                      : '最終確認: ${_lastUpdateCheckedAt!.toLocal().toString().substring(0, 19)}',
+                ),
               ),
               ElevatedButton.icon(
                 onPressed: _checkingUpdate
@@ -116,6 +121,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             );
                           }
                         } finally {
+                          await _loadLastCheckedAt();
                           if (mounted) {
                             setState(() => _checkingUpdate = false);
                           }

@@ -83,6 +83,7 @@ class VersionCheckService {
     final packageInfo = await PackageInfo.fromPlatform();
     final currentVersion = _normalizeVersion(packageInfo.version);
     final prefs = await SharedPreferences.getInstance();
+    final checkStartedAt = DateTime.now();
 
     if (!force) {
       final cached = await getCachedResult();
@@ -109,7 +110,7 @@ class VersionCheckService {
         isRequired: false,
         currentVersion: currentVersion,
         latestVersion: currentVersion,
-        checkedAt: DateTime.now(),
+        checkedAt: checkStartedAt,
         error: 'No network connection',
       );
     }
@@ -141,7 +142,7 @@ class VersionCheckService {
         releaseNotes: releaseBody,
         apkUrl: apkUrl,
         publishedAt: publishedAt,
-        checkedAt: DateTime.now(),
+        checkedAt: checkStartedAt,
       );
 
       await prefs.setString(_cacheKey, jsonEncode(result.toMap()));
@@ -159,9 +160,11 @@ class VersionCheckService {
         isRequired: false,
         currentVersion: currentVersion,
         latestVersion: currentVersion,
-        checkedAt: DateTime.now(),
+        checkedAt: checkStartedAt,
         error: e.toString(),
       );
+    } finally {
+      await prefs.setString(_lastCheckedKey, checkStartedAt.toIso8601String());
     }
   }
 
