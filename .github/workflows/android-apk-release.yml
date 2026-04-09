@@ -42,35 +42,72 @@ jobs:
           fi
           printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/release.keystore
 
+      - name: Validate keystore before build
+        id: validate_keystore
+        env:
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEYSTORE_TYPE: ${{ secrets.ANDROID_KEYSTORE_TYPE }}
+        run: |
+          if [ -z "$ANDROID_STORE_PASSWORD" ]; then
+            echo "ANDROID_STORE_PASSWORD is not set."
+            exit 1
+          fi
+
+          FILE_SIZE=$(wc -c < android/app/release.keystore)
+          echo "Keystore size: ${FILE_SIZE} bytes"
+
+          REQUESTED_TYPE=${ANDROID_KEYSTORE_TYPE:-}
+          CANDIDATES=()
+          if [ -n "$REQUESTED_TYPE" ]; then
+            CANDIDATES+=("$REQUESTED_TYPE")
+          fi
+          CANDIDATES+=("PKCS12" "JKS")
+
+          DETECTED_TYPE=""
+          LAST_ERROR=""
+
+          for KEYSTORE_TYPE in "${CANDIDATES[@]}"; do
+            if [ -z "$KEYSTORE_TYPE" ]; then
+              continue
+            fi
+            echo "Trying store type: $KEYSTORE_TYPE"
+            if keytool -list \
+              -keystore android/app/release.keystore \
+              -storetype "$KEYSTORE_TYPE" \
+              -storepass "$ANDROID_STORE_PASSWORD" > /dev/null 2> keytool_error.log; then
+              DETECTED_TYPE="$KEYSTORE_TYPE"
+              break
+            fi
+            LAST_ERROR=$(cat keytool_error.log)
+          done
+
+          if [ -z "$DETECTED_TYPE" ]; then
+            echo "Failed to open keystore with all candidate store types."
+            echo "Last keytool error:"
+            cat keytool_error.log
+            exit 1
+          fi
+
+          echo "Detected store type: $DETECTED_TYPE"
+          echo "store_type=$DETECTED_TYPE" >> "$GITHUB_OUTPUT"
+
       - name: Create key.properties
         env:
           ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-          ANDROID_KEYSTORE_TYPE: ${{ secrets.ANDROID_KEYSTORE_TYPE }}
         run: |
           if [ -z "$ANDROID_STORE_PASSWORD" ] || [ -z "$ANDROID_KEY_ALIAS" ] || [ -z "$ANDROID_KEY_PASSWORD" ]; then
             echo "Android signing secrets are not fully configured."
             exit 1
           fi
-          KEYSTORE_TYPE=${ANDROID_KEYSTORE_TYPE:-PKCS12}
+          KEYSTORE_TYPE="${{ steps.validate_keystore.outputs.store_type }}"
           printf '%s\n' \
             'storeFile=release.keystore' \
             "storeType=$KEYSTORE_TYPE" \
             "storePassword=$ANDROID_STORE_PASSWORD" \
             "keyAlias=$ANDROID_KEY_ALIAS" \
             "keyPassword=$ANDROID_KEY_PASSWORD" > android/key.properties
-
-      - name: Validate keystore before build
-        env:
-          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
-          ANDROID_KEYSTORE_TYPE: ${{ secrets.ANDROID_KEYSTORE_TYPE }}
-        run: |
-          KEYSTORE_TYPE=${ANDROID_KEYSTORE_TYPE:-PKCS12}
-          keytool -list \
-            -keystore android/app/release.keystore \
-            -storetype "$KEYSTORE_TYPE" \
-            -storepass "$ANDROID_STORE_PASSWORD" > /dev/null
 
       - name: Build APK (release)
         run: flutter build apk --release
