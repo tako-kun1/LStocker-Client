@@ -55,6 +55,8 @@ jobs:
 
           FILE_SIZE=$(wc -c < android/app/release.keystore)
           echo "Keystore size: ${FILE_SIZE} bytes"
+          sha256sum android/app/release.keystore | awk '{print "Keystore sha256:",$1}'
+          xxd -l 8 -p android/app/release.keystore | awk '{print "Keystore header(hex):",$1}'
 
           REQUESTED_TYPE=${ANDROID_KEYSTORE_TYPE:-}
           CANDIDATES=()
@@ -74,7 +76,7 @@ jobs:
             if keytool -list \
               -keystore android/app/release.keystore \
               -storetype "$KEYSTORE_TYPE" \
-              -storepass "$ANDROID_STORE_PASSWORD" > /dev/null 2> keytool_error.log; then
+              -storepass "$ANDROID_STORE_PASSWORD" > keytool_error.log 2>&1; then
               DETECTED_TYPE="$KEYSTORE_TYPE"
               break
             fi
