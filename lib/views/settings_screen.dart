@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 import '../providers/settings_provider.dart';
 
@@ -11,12 +12,14 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   late TextEditingController _urlController;
+  late Future<PackageInfo> _packageInfoFuture;
 
   @override
   void initState() {
     super.initState();
     final settings = Provider.of<SettingsProvider>(context, listen: false);
     _urlController = TextEditingController(text: settings.serverUrl);
+    _packageInfoFuture = PackageInfo.fromPlatform();
   }
 
   @override
@@ -74,6 +77,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.all(16),
                 ),
+              ),
+              const SizedBox(height: 32),
+              FutureBuilder<PackageInfo>(
+                future: _packageInfoFuture,
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) {
+                    return const SizedBox.shrink();
+                  }
+
+                  final info = snapshot.data!;
+                  return Center(
+                    child: Text(
+                      'バージョン ${info.version} (${info.buildNumber})',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  );
+                },
               ),
             ],
           );
