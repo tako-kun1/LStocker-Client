@@ -40,23 +40,37 @@ jobs:
             echo "ANDROID_KEYSTORE_BASE64 is not set."
             exit 1
           fi
-          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/release.keystore
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/release.keystore
 
       - name: Create key.properties
         env:
           ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEYSTORE_TYPE: ${{ secrets.ANDROID_KEYSTORE_TYPE }}
         run: |
           if [ -z "$ANDROID_STORE_PASSWORD" ] || [ -z "$ANDROID_KEY_ALIAS" ] || [ -z "$ANDROID_KEY_PASSWORD" ]; then
             echo "Android signing secrets are not fully configured."
             exit 1
           fi
+          KEYSTORE_TYPE=${ANDROID_KEYSTORE_TYPE:-PKCS12}
           printf '%s\n' \
             'storeFile=release.keystore' \
+            "storeType=$KEYSTORE_TYPE" \
             "storePassword=$ANDROID_STORE_PASSWORD" \
             "keyAlias=$ANDROID_KEY_ALIAS" \
             "keyPassword=$ANDROID_KEY_PASSWORD" > android/key.properties
+
+      - name: Validate keystore before build
+        env:
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEYSTORE_TYPE: ${{ secrets.ANDROID_KEYSTORE_TYPE }}
+        run: |
+          KEYSTORE_TYPE=${ANDROID_KEYSTORE_TYPE:-PKCS12}
+          keytool -list \
+            -keystore android/app/release.keystore \
+            -storetype "$KEYSTORE_TYPE" \
+            -storepass "$ANDROID_STORE_PASSWORD" > /dev/null
 
       - name: Build APK (release)
         run: flutter build apk --release

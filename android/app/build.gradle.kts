@@ -43,6 +43,10 @@ android {
         create("release") {
             if (keystorePropertiesFile.exists()) {
                 storeFile = file(keystoreProperties["storeFile"] as String)
+                val configuredStoreType = keystoreProperties.getProperty("storeType")
+                if (!configuredStoreType.isNullOrBlank()) {
+                    storeType = configuredStoreType
+                }
                 storePassword = keystoreProperties["storePassword"] as String
                 keyAlias = keystoreProperties["keyAlias"] as String
                 keyPassword = keystoreProperties["keyPassword"] as String
