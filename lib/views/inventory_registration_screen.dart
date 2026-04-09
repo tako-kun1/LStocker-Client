@@ -17,16 +17,31 @@ class InventoryRegistrationScreen extends StatefulWidget {
 }
 
 class _InventoryRegistrationScreenState extends State<InventoryRegistrationScreen> {
+  static const int _maxJanLength = 24;
   final _janController = TextEditingController();
   final _janFocusNode = FocusNode();
   final _dateController = TextEditingController();
+  final _dateFocusNode = FocusNode();
   final _quantityController = TextEditingController();
+  final _quantityFocusNode = FocusNode();
   Product? _foundProduct;
   bool _isLoading = false;
 
   String _normalizeJan(String value) {
     final digits = value.replaceAll(RegExp(r'[^0-9]'), '');
-    return digits.length > 13 ? digits.substring(0, 13) : digits;
+    return digits.length > _maxJanLength
+        ? digits.substring(0, _maxJanLength)
+        : digits;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _janFocusNode.requestFocus();
+      }
+    });
   }
 
   @override
@@ -34,13 +49,15 @@ class _InventoryRegistrationScreenState extends State<InventoryRegistrationScree
     _janController.dispose();
     _janFocusNode.dispose();
     _dateController.dispose();
+    _dateFocusNode.dispose();
     _quantityController.dispose();
+    _quantityFocusNode.dispose();
     super.dispose();
   }
 
-  Future<void> _searchProduct(String jan) async {
+  Future<bool> _searchProduct(String jan) async {
     final normalizedJan = _normalizeJan(jan);
-    if (normalizedJan.isEmpty) return;
+    if (normalizedJan.isEmpty) return false;
 
     if (_janController.text != normalizedJan) {
       _janController.text = normalizedJan;
@@ -54,6 +71,8 @@ class _InventoryRegistrationScreenState extends State<InventoryRegistrationScree
       _foundProduct = product;
       _isLoading = false;
     });
+
+    return product != null;
   }
 
   Future<void> _scanBarcode() async {
@@ -65,7 +84,10 @@ class _InventoryRegistrationScreenState extends State<InventoryRegistrationScree
       final normalized = _normalizeJan(result);
       _janController.text = normalized;
       _janController.selection = TextSelection.collapsed(offset: normalized.length);
-      _searchProduct(normalized);
+      final found = await _searchProduct(normalized);
+      if (found && mounted) {
+        _dateFocusNode.requestFocus();
+      }
     }
   }
 
@@ -150,13 +172,19 @@ class _InventoryRegistrationScreenState extends State<InventoryRegistrationScree
                     controller: _janController,
                     focusNode: _janFocusNode,
                     decoration: const InputDecoration(labelText: 'JANコード'),
-                    keyboardType: TextInputType.number,
-                    textInputAction: TextInputAction.done,
+                    keyboardType: TextInputType.none,
+                    textInputAction: TextInputAction.next,
                     inputFormatters: [
                       FilteringTextInputFormatter.digitsOnly,
-                      LengthLimitingTextInputFormatter(13),
+                      LengthLimitingTextInputFormatter(_maxJanLength),
                     ],
-                    onFieldSubmitted: (value) => _searchProduct(value),
+                    onTap: () => SystemChannels.textInput.invokeMethod('TextInput.hide'),
+                    onFieldSubmitted: (value) async {
+                      final found = await _searchProduct(value);
+                      if (found && mounted) {
+                        _dateFocusNode.requestFocus();
+                      }
+                    },
                   ),
                 ),
                 IconButton(onPressed: _scanBarcode, icon: const Icon(Icons.qr_code_scanner)),
@@ -194,20 +222,26 @@ class _InventoryRegistrationScreenState extends State<InventoryRegistrationScree
               const SizedBox(height: 8),
               TextFormField(
                 controller: _dateController,
+                focusNode: _dateFocusNode,
                 decoration: const InputDecoration(
                   labelText: '賞味期限 (YYYYMMDD入力)',
                   hintText: '例: 20260712 (自動で 2026/07/12 に変換)',
                 ),
                 keyboardType: TextInputType.number,
+                textInputAction: TextInputAction.next,
                 inputFormatters: [
                   _DateInputFormatter(),
                 ],
+                onFieldSubmitted: (_) => _quantityFocusNode.requestFocus(),
               ),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _quantityController,
+                focusNode: _quantityFocusNode,
                 decoration: const InputDecoration(labelText: '数量'),
                 keyboardType: TextInputType.number,
+                textInputAction: TextInputAction.done,
+                onFieldSubmitted: (_) => _saveInventory(),
               ),
               const SizedBox(height: 24),
               ElevatedButton(

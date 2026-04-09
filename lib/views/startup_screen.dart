@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../providers/inventory_provider.dart';
 import '../providers/product_provider.dart';
 import '../providers/settings_provider.dart';
+import '../services/app_config.dart';
 import '../services/offline_db_service.dart';
 import '../services/sync_service.dart';
 import '../services/version_check_service.dart';
@@ -42,7 +43,7 @@ class _StartupScreenState extends State<StartupScreen> {
       return;
     }
 
-    final shouldPrompt = await _offlineDbService.shouldPromptForExistingOfflineDb();
+    final shouldPrompt = await _offlineDbService.shouldPromptForLegacyImport();
 
     if (!mounted) {
       return;
@@ -54,13 +55,15 @@ class _StartupScreenState extends State<StartupScreen> {
         return;
       }
 
-      if (!shouldLoad) {
-        await _offlineDbService.archiveExistingOfflineDb();
+      if (shouldLoad) {
+        await _offlineDbService.importLegacyDatabaseToActive();
+      } else {
+        await _offlineDbService.archiveLegacySourceDatabase();
       }
 
-      await _offlineDbService.markFirstLaunchHandled();
+      await _offlineDbService.markLegacyImportHandled();
     } else {
-      await _offlineDbService.markFirstLaunchHandled();
+      await _offlineDbService.markLegacyImportHandled();
     }
 
     if (!mounted) {
@@ -76,11 +79,13 @@ class _StartupScreenState extends State<StartupScreen> {
     }
 
     if (updateResult != null &&
-        updateResult.updateAvailable &&
-        updateResult.isRequired &&
-        (updateResult.apkUrl?.isNotEmpty ?? false)) {
-      await _showRequiredUpdateDialog(updateResult);
-      return;
+        updateResult.updateAvailable) {
+      if (updateResult.isRequired) {
+        await _showRequiredUpdateDialog(updateResult);
+        return;
+      }
+
+      await _showOptionalUpdateDialog(updateResult);
     }
 
     await Future.wait([
@@ -126,8 +131,8 @@ class _StartupScreenState extends State<StartupScreen> {
         return AlertDialog(
           title: const Text('オフラインデータを検出しました'),
           content: const Text(
-            'Documents/LStocker に既存のオフラインDBが見つかりました。\n'
-            'このデータをアプリ内DBとして読み込みますか？',
+            '旧バージョンのローカルDBが見つかりました。\n'
+            '現在の保存先へデータを移行して読み込みますか？',
           ),
           actions: [
             TextButton(
@@ -167,14 +172,7 @@ class _StartupScreenState extends State<StartupScreen> {
             ),
             ElevatedButton(
               onPressed: () async {
-                final apkUrl = result.apkUrl;
-                if (apkUrl == null || apkUrl.isEmpty) {
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('APK URLが見つかりません。リリース設定を確認してください。')),
-                  );
-                  return;
-                }
+                final apkUrl = result.apkUrl ?? AppConfig.githubReleasesPageUrl;
 
                 final uri = Uri.tryParse(apkUrl);
                 if (uri == null) {
@@ -189,6 +187,47 @@ class _StartupScreenState extends State<StartupScreen> {
                 await SystemNavigator.pop();
               },
               child: const Text('更新ページを開く'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _showOptionalUpdateDialog(VersionCheckResult result) async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('アップデートがあります'),
+          content: Text(
+            '現在のバージョン: ${result.currentVersion}\n'
+            '最新バージョン: ${result.latestVersion}\n\n'
+            '更新を行いますか？',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('あとで'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final apkUrl = result.apkUrl ?? AppConfig.githubReleasesPageUrl;
+                final uri = Uri.tryParse(apkUrl);
+                if (uri == null) {
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('更新URLの形式が不正です。')),
+                  );
+                  return;
+                }
+
+                await launchUrl(uri, mode: LaunchMode.externalApplication);
+                if (context.mounted) {
+                  Navigator.of(context).pop();
+                }
+              },
+              child: const Text('更新する'),
             ),
           ],
         );

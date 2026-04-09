@@ -18,6 +18,7 @@ class ProductRegistrationScreen extends StatefulWidget {
 }
 
 class _ProductRegistrationScreenState extends State<ProductRegistrationScreen> {
+  static const int _maxJanLength = 24;
   final _formKey = GlobalKey<FormState>();
   final _janController = TextEditingController();
   final _janFocusNode = FocusNode();
@@ -31,7 +32,9 @@ class _ProductRegistrationScreenState extends State<ProductRegistrationScreen> {
 
   String _normalizeJan(String value) {
     final digits = value.replaceAll(RegExp(r'[^0-9]'), '');
-    return digits.length > 13 ? digits.substring(0, 13) : digits;
+    return digits.length > _maxJanLength
+        ? digits.substring(0, _maxJanLength)
+        : digits;
   }
 
   @override
@@ -47,6 +50,12 @@ class _ProductRegistrationScreenState extends State<ProductRegistrationScreen> {
       _selectedDept = widget.editProduct!.deptNumber;
       _imagePath = widget.editProduct!.imagePath;
     }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _janFocusNode.requestFocus();
+      }
+    });
   }
 
   @override
@@ -150,12 +159,13 @@ class _ProductRegistrationScreenState extends State<ProductRegistrationScreen> {
                       controller: _janController,
                       focusNode: _janFocusNode,
                       decoration: const InputDecoration(labelText: 'JANコード'),
-                      keyboardType: TextInputType.number,
+                      keyboardType: TextInputType.none,
                       textInputAction: TextInputAction.next,
                       inputFormatters: [
                         FilteringTextInputFormatter.digitsOnly,
-                        LengthLimitingTextInputFormatter(13),
+                        LengthLimitingTextInputFormatter(_maxJanLength),
                       ],
+                      onTap: () => SystemChannels.textInput.invokeMethod('TextInput.hide'),
                       onFieldSubmitted: (_) => FocusScope.of(context).nextFocus(),
                       validator: (v) => v == null || v.isEmpty ? '入力してください' : null,
                     ),
@@ -167,6 +177,8 @@ class _ProductRegistrationScreenState extends State<ProductRegistrationScreen> {
               TextFormField(
                 controller: _nameController,
                 decoration: const InputDecoration(labelText: '商品名'),
+                textInputAction: TextInputAction.next,
+                onFieldSubmitted: (_) => FocusScope.of(context).nextFocus(),
                 validator: (v) => v == null || v.isEmpty ? '入力してください' : null,
               ),
               const SizedBox(height: 16),
@@ -186,8 +198,11 @@ class _ProductRegistrationScreenState extends State<ProductRegistrationScreen> {
                   labelText: 'DEPT番号',
                   hintText: '数字で入力 (例: 1)',
                 ),
-                keyboardType: TextInputType.number,
+                keyboardType: TextInputType.none,
+                textInputAction: TextInputAction.next,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                onTap: () => SystemChannels.textInput.invokeMethod('TextInput.hide'),
+                onFieldSubmitted: (_) => FocusScope.of(context).nextFocus(),
                 validator: (v) {
                   if (v == null || v.isEmpty) return '入力してください';
                   final val = int.tryParse(v);
@@ -202,6 +217,8 @@ class _ProductRegistrationScreenState extends State<ProductRegistrationScreen> {
                 controller: _salesPeriodController,
                 decoration: const InputDecoration(labelText: '販売許容期間 (0～1000)'),
                 keyboardType: TextInputType.number,
+                textInputAction: TextInputAction.next,
+                onFieldSubmitted: (_) => FocusScope.of(context).nextFocus(),
                 validator: (v) {
                   if (v == null || v.isEmpty) return '入力してください';
                   final val = int.tryParse(v);

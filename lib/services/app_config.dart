@@ -35,4 +35,6 @@ class AppConfig {
   static const String githubRepoName = 'LStocker-Client';
   static const String githubLatestReleaseApi =
       'https://api.github.com/repos/$githubRepoOwner/$githubRepoName/releases/latest';
+    static const String githubReleasesPageUrl =
+      'https://github.com/tako-kun1/LStocker-Client/releases';
 }

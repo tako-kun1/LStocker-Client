@@ -3,137 +3,169 @@ import 'dart:io';
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sqflite/sqflite.dart';
 
 class OfflineDbService {
-  static const String _handledKey = 'offline_db_first_launch_handled';
+  static const String _legacyImportHandledKey =
+      'offline_db_legacy_import_handled';
   static const String dbFileName = 'offlinedb.db';
-  static const String _publicLStockerDirPath =
-      '/storage/emulated/0/Documents/LStocker';
 
   Future<String?> getActiveDatabasePath() async {
     if (!Platform.isAndroid) {
       return null;
     }
 
-    final dir = await _getLStockerDirectory();
+    final dir = await _getPrimaryDatabaseDirectory();
     return join(dir.path, dbFileName);
   }
 
-  Future<bool> shouldPromptForExistingOfflineDb() async {
+  Future<bool> shouldPromptForLegacyImport() async {
     if (!Platform.isAndroid) {
       return false;
     }
 
     final prefs = await SharedPreferences.getInstance();
-    final handled = prefs.getBool(_handledKey) ?? false;
+    final handled = prefs.getBool(_legacyImportHandledKey) ?? false;
     if (handled) {
       return false;
     }
 
-    final dir = await _getLStockerDirectory();
-    final dbFile = File(join(dir.path, dbFileName));
-    return dbFile.exists();
+    final activePath = await getActiveDatabasePath();
+    if (activePath == null) {
+      return false;
+    }
+
+    final activeDb = File(activePath);
+    if (await activeDb.exists()) {
+      return false;
+    }
+
+    final legacyPath = await findLegacyDatabasePath();
+    return legacyPath != null;
   }
 
-  Future<void> archiveExistingOfflineDb() async {
+  Future<void> markLegacyImportHandled() async {
     if (!Platform.isAndroid) {
       return;
     }
 
-    final dir = await _getLStockerDirectory();
-    final currentDb = File(join(dir.path, dbFileName));
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_legacyImportHandledKey, true);
+  }
+
+  Future<String?> findLegacyDatabasePath() async {
+    if (!Platform.isAndroid) {
+      return null;
+    }
+
+    final candidates = <String>[];
+
+    candidates.add('/storage/emulated/0/Documents/LStocker/$dbFileName');
+
+    final externalDir = await getExternalStorageDirectory();
+    if (externalDir != null) {
+      candidates.add(
+        join(externalDir.path, 'Documents', 'LStocker', dbFileName),
+      );
+    }
+
+    candidates.add(join(await getDatabasesPath(), 'bardber.db'));
+
+    for (final path in candidates) {
+      final file = File(path);
+      if (await file.exists()) {
+        return path;
+      }
+    }
+
+    return null;
+  }
+
+  Future<bool> importLegacyDatabaseToActive({bool archiveSource = false}) async {
+    if (!Platform.isAndroid) {
+      return false;
+    }
+
+    final activePath = await getActiveDatabasePath();
+    final legacyPath = await findLegacyDatabasePath();
+    if (activePath == null || legacyPath == null) {
+      return false;
+    }
+
+    final activeDb = File(activePath);
+    if (await activeDb.exists()) {
+      return true;
+    }
+
+    final legacyDb = File(legacyPath);
+    if (!await legacyDb.exists()) {
+      return false;
+    }
+
+    await Directory(dirname(activePath)).create(recursive: true);
+    await legacyDb.copy(activePath);
+    await _copyIfExists(
+      File('$legacyPath-wal'),
+      File('$activePath-wal'),
+    );
+    await _copyIfExists(
+      File('$legacyPath-shm'),
+      File('$activePath-shm'),
+    );
+
+    if (archiveSource) {
+      await _archiveDatabaseFile(legacyPath);
+    }
+
+    return true;
+  }
+
+  Future<void> archiveLegacySourceDatabase() async {
+    if (!Platform.isAndroid) {
+      return;
+    }
+
+    final legacyPath = await findLegacyDatabasePath();
+    if (legacyPath == null) {
+      return;
+    }
+
+    await _archiveDatabaseFile(legacyPath);
+  }
+
+  Future<Directory> _getPrimaryDatabaseDirectory() async {
+    if (!Platform.isAndroid) {
+      throw Exception('This directory strategy is only available on Android.');
+    }
+
+    final supportDir = await getApplicationSupportDirectory();
+    final dbDir = Directory(join(supportDir.path, 'db'));
+    if (!await dbDir.exists()) {
+      await dbDir.create(recursive: true);
+    }
+
+    return dbDir;
+  }
+
+  Future<void> _archiveDatabaseFile(String dbPath) async {
+    final currentDb = File(dbPath);
     if (!await currentDb.exists()) {
       return;
     }
 
     final archiveName = 'offlinedb_${DateTime.now().millisecondsSinceEpoch}.old';
-    final archivedDb = File(join(dir.path, archiveName));
+    final archivedDb = File(join(dirname(dbPath), archiveName));
     await currentDb.rename(archivedDb.path);
 
-    final wal = File('${currentDb.path}-wal');
+    final wal = File('$dbPath-wal');
     if (await wal.exists()) {
       await wal.delete();
     }
 
-    final shm = File('${currentDb.path}-shm');
+    final shm = File('$dbPath-shm');
     if (await shm.exists()) {
       await shm.delete();
     }
-  }
-
-  Future<void> markFirstLaunchHandled() async {
-    if (!Platform.isAndroid) {
-      return;
-    }
-
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_handledKey, true);
-  }
-
-  Future<Directory> _getLStockerDirectory() async {
-    if (!Platform.isAndroid) {
-      throw Exception('This directory strategy is only available on Android.');
-    }
-
-    final publicDir = Directory(_publicLStockerDirPath);
-    if (await _ensureDirectoryWritable(publicDir)) {
-      await _migrateLegacyAppScopedDb(publicDir);
-      return publicDir;
-    }
-
-    final baseDir = await getExternalStorageDirectory();
-    if (baseDir == null) {
-      throw Exception(
-        'External storage directory is not available on this device.',
-      );
-    }
-
-    final lStockerDir = Directory(join(baseDir.path, 'Documents', 'LStocker'));
-    if (!await lStockerDir.exists()) {
-      await lStockerDir.create(recursive: true);
-    }
-
-    return lStockerDir;
-  }
-
-  Future<bool> _ensureDirectoryWritable(Directory dir) async {
-    try {
-      if (!await dir.exists()) {
-        await dir.create(recursive: true);
-      }
-
-      final probe = File(join(dir.path, '.write_probe'));
-      await probe.writeAsString('ok', flush: true);
-      await probe.delete();
-      return true;
-    } catch (_) {
-      return false;
-    }
-  }
-
-  Future<void> _migrateLegacyAppScopedDb(Directory targetDir) async {
-    final baseDir = await getExternalStorageDirectory();
-    if (baseDir == null) {
-      return;
-    }
-
-    final legacyDir = Directory(join(baseDir.path, 'Documents', 'LStocker'));
-    final legacyDb = File(join(legacyDir.path, dbFileName));
-    final targetDb = File(join(targetDir.path, dbFileName));
-
-    if (!await legacyDb.exists() || await targetDb.exists()) {
-      return;
-    }
-
-    await legacyDb.copy(targetDb.path);
-    await _copyIfExists(
-      File('${legacyDb.path}-wal'),
-      File('${targetDb.path}-wal'),
-    );
-    await _copyIfExists(
-      File('${legacyDb.path}-shm'),
-      File('${targetDb.path}-shm'),
-    );
   }
 
   Future<void> _copyIfExists(File source, File destination) async {
