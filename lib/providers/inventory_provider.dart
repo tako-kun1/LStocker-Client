@@ -47,11 +47,14 @@ class InventoryProvider with ChangeNotifier {
 
     try {
       // ローカル DB に追加
-      await _dbHelper.insertInventory(inventory);
+      final insertedId = await _dbHelper.insertInventory(
+        inventory,
+        syncStatus: 'pending',
+      );
 
       // Sync queue に追加
       await _syncService.queueInventoryChange(
-        id: inventory.id,
+        id: insertedId,
         janCode: inventory.janCode,
         quantity: inventory.quantity,
         expirationDate: inventory.expirationDate.toIso8601String().split('T')[0],
@@ -68,7 +71,7 @@ class InventoryProvider with ChangeNotifier {
   }
 
   Future<void> archiveInventory(int id) async {
-    await _dbHelper.archiveInventory(id);
+    await _dbHelper.archiveInventory(id, syncStatus: 'pending');
 
     // Sync queue に追加
     final inventory = _inventories.firstWhere((i) => i.id == id);
@@ -86,7 +89,7 @@ class InventoryProvider with ChangeNotifier {
   }
 
   Future<void> deleteInventory(int id) async {
-    await _dbHelper.deleteInventory(id);
+    await _dbHelper.archiveInventory(id, syncStatus: 'pending');
 
     // Sync queue に追加
     final inventory = _inventories.firstWhere((i) => i.id == id, orElse: () => Inventory(id: id, janCode: '', expirationDate: DateTime.now(), quantity: 0, registrationDate: DateTime.now()));
@@ -97,7 +100,7 @@ class InventoryProvider with ChangeNotifier {
       quantity: inventory.quantity,
       expirationDate: inventory.expirationDate.toIso8601String().split('T')[0],
       registrationDate: inventory.registrationDate.toIso8601String().split('T')[0],
-      isArchived: inventory.isArchived,
+      isArchived: true,
       operation: 'delete',
     );
 

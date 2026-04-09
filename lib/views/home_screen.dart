@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/sync_service.dart';
 import 'product_registration_screen.dart';
 import 'product_list_screen.dart';
 import 'inventory_registration_screen.dart';
@@ -6,8 +7,43 @@ import 'inventory_status_screen.dart';
 import 'notification_screen.dart';
 import 'settings_screen.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
+  final _syncService = SyncService();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _triggerAutoSync();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _triggerAutoSync();
+    }
+  }
+
+  Future<void> _triggerAutoSync() async {
+    try {
+      await _syncService.manualFullSync();
+    } catch (_) {
+      // 同期失敗はホーム表示をブロックしない
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

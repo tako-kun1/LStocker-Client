@@ -13,6 +13,33 @@ class ApiService {
 
   ApiService._internal();
 
+  // ==================== Health / Bootstrap ====================
+
+  Future<void> health() async {
+    try {
+      await _apiClient.get('/health');
+    } on DioException catch (e) {
+      throw ApiException.fromDioException(e);
+    }
+  }
+
+  Future<Map<String, dynamic>> info() async {
+    try {
+      final response = await _apiClient.get('/info');
+      return Map<String, dynamic>.from(response.data as Map);
+    } on DioException catch (e) {
+      throw ApiException.fromDioException(e);
+    }
+  }
+
+  Future<void> activate() async {
+    try {
+      await _apiClient.post('/activate');
+    } on DioException catch (e) {
+      throw ApiException.fromDioException(e);
+    }
+  }
+
   // ==================== Products ====================
 
   /// 商品一覧を取得
@@ -63,6 +90,54 @@ class ApiService {
       );
 
       return successResponse.data;
+    } on DioException catch (e) {
+      throw ApiException.fromDioException(e);
+    }
+  }
+
+  Future<Map<String, dynamic>> syncProductsRaw(
+    Map<String, dynamic> request,
+  ) async {
+    try {
+      final response = await _apiClient.post('/products/sync', data: request);
+      return Map<String, dynamic>.from(response.data as Map);
+    } on DioException catch (e) {
+      throw ApiException.fromDioException(e);
+    }
+  }
+
+  Future<ProductDto> getProduct(String janCode) async {
+    try {
+      final response = await _apiClient.get('/products/$janCode');
+      final successResponse = SuccessResponse.fromJson(
+        response.data,
+        (json) => ProductDto.fromJson(json as Map<String, dynamic>),
+      );
+      return successResponse.data;
+    } on DioException catch (e) {
+      throw ApiException.fromDioException(e);
+    }
+  }
+
+  Future<void> createProduct(ProductUpdateDto request) async {
+    try {
+      await _apiClient.post('/products', data: request.toJson());
+    } on DioException catch (e) {
+      throw ApiException.fromDioException(e);
+    }
+  }
+
+  Future<void> updateProduct(String janCode, ProductUpdateDto request) async {
+    try {
+      await _apiClient.put('/products/$janCode', data: request.toJson());
+    } on DioException catch (e) {
+      throw ApiException.fromDioException(e);
+    }
+  }
+
+  Future<void> deleteProduct(String janCode) async {
+    try {
+      await _apiClient.delete('/products/$janCode');
     } on DioException catch (e) {
       throw ApiException.fromDioException(e);
     }
@@ -128,6 +203,54 @@ class ApiService {
     }
   }
 
+  Future<Map<String, dynamic>> syncInventoriesRaw(
+    Map<String, dynamic> request,
+  ) async {
+    try {
+      final response = await _apiClient.post('/inventories/sync', data: request);
+      return Map<String, dynamic>.from(response.data as Map);
+    } on DioException catch (e) {
+      throw ApiException.fromDioException(e);
+    }
+  }
+
+  Future<InventoryDto> getInventory(int id) async {
+    try {
+      final response = await _apiClient.get('/inventories/$id');
+      final successResponse = SuccessResponse.fromJson(
+        response.data,
+        (json) => InventoryDto.fromJson(json as Map<String, dynamic>),
+      );
+      return successResponse.data;
+    } on DioException catch (e) {
+      throw ApiException.fromDioException(e);
+    }
+  }
+
+  Future<void> createInventory(InventoryUpdateDto request) async {
+    try {
+      await _apiClient.post('/inventories', data: request.toJson());
+    } on DioException catch (e) {
+      throw ApiException.fromDioException(e);
+    }
+  }
+
+  Future<void> updateInventory(int id, InventoryUpdateDto request) async {
+    try {
+      await _apiClient.put('/inventories/$id', data: request.toJson());
+    } on DioException catch (e) {
+      throw ApiException.fromDioException(e);
+    }
+  }
+
+  Future<void> deleteInventory(int id) async {
+    try {
+      await _apiClient.delete('/inventories/$id');
+    } on DioException catch (e) {
+      throw ApiException.fromDioException(e);
+    }
+  }
+
   // ==================== Departments ====================
 
   /// 部門一覧を取得
@@ -141,6 +264,18 @@ class ApiService {
       );
 
       return successResponse.data;
+    } on DioException catch (e) {
+      throw ApiException.fromDioException(e);
+    }
+  }
+
+  Future<List<int>> getImageBytes(String id) async {
+    try {
+      final response = await _apiClient.dio.get<List<int>>(
+        '/images/$id',
+        options: Options(responseType: ResponseType.bytes),
+      );
+      return response.data ?? <int>[];
     } on DioException catch (e) {
       throw ApiException.fromDioException(e);
     }
@@ -196,9 +331,13 @@ class ApiException implements Exception {
   /// バリデーションエラーか判定
   bool get isValidationError => statusCode == 400;
 
+  bool get isValidation422 => statusCode == 422;
+
   /// リソースが見つからないか判定
   bool get isNotFound => statusCode == 404;
 
   /// 競合エラーか判定
   bool get isConflict => statusCode == 409;
+
+  bool get isServerError => statusCode != null && statusCode! >= 500;
 }

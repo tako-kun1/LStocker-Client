@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_client.dart';
+import '../services/app_config.dart';
 
 class SettingsProvider with ChangeNotifier {
   static const String barcodeScanMethodCamera = 'camera';
@@ -10,6 +11,7 @@ class SettingsProvider with ChangeNotifier {
   bool _pushNotificationsEnabled = true;
   String _syncTiming = 'Manual';
   String _barcodeScanMethod = barcodeScanMethodCamera;
+  bool _autoCheckUpdateOnStartup = true;
   int? _userId;
   String? _username;
   bool _isLoggedIn = false;
@@ -18,18 +20,21 @@ class SettingsProvider with ChangeNotifier {
   bool get pushNotificationsEnabled => _pushNotificationsEnabled;
   String get syncTiming => _syncTiming;
   String get barcodeScanMethod => _barcodeScanMethod;
+  bool get autoCheckUpdateOnStartup => _autoCheckUpdateOnStartup;
   int? get userId => _userId;
   String? get username => _username;
   bool get isLoggedIn => _isLoggedIn;
 
   Future<void> loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
-    _serverUrl = prefs.getString('serverUrl') ?? '';
+    _serverUrl = prefs.getString('serverUrl') ?? AppConfig.defaultBaseUrl;
     _pushNotificationsEnabled = prefs.getBool('pushNotificationsEnabled') ?? true;
     _syncTiming = prefs.getString('syncTiming') ?? 'Manual';
     _barcodeScanMethod = _normalizeBarcodeScanMethod(
       prefs.getString('barcodeScanMethod'),
     );
+    _autoCheckUpdateOnStartup =
+        prefs.getBool('autoCheckUpdateOnStartup') ?? true;
 
     // ユーザー情報を読み込む
     final apiClient = ApiClient();
@@ -65,6 +70,13 @@ class SettingsProvider with ChangeNotifier {
     _barcodeScanMethod = _normalizeBarcodeScanMethod(method);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('barcodeScanMethod', _barcodeScanMethod);
+    notifyListeners();
+  }
+
+  Future<void> setAutoCheckUpdateOnStartup(bool enabled) async {
+    _autoCheckUpdateOnStartup = enabled;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('autoCheckUpdateOnStartup', enabled);
     notifyListeners();
   }
 

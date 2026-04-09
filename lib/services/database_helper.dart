@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 import '../models/product.dart';
@@ -21,13 +22,51 @@ class DatabaseHelper {
   Future<Database> _initDatabase() async {
     final offlineDbService = OfflineDbService();
     final offlinePath = await offlineDbService.getActiveDatabasePath();
-    final path = offlinePath ?? join(await getDatabasesPath(), 'bardber.db');
+    final legacyPath = join(await getDatabasesPath(), 'bardber.db');
+
+    if (offlinePath != null) {
+      await _migrateLegacyInternalDbIfNeeded(
+        legacyPath: legacyPath,
+        offlinePath: offlinePath,
+      );
+    }
+
+    final path = offlinePath ?? legacyPath;
     return await openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
+  }
+
+  Future<void> _migrateLegacyInternalDbIfNeeded({
+    required String legacyPath,
+    required String offlinePath,
+  }) async {
+    final legacyDb = File(legacyPath);
+    final offlineDb = File(offlinePath);
+
+    if (!await legacyDb.exists() || await offlineDb.exists()) {
+      return;
+    }
+
+    await Directory(dirname(offlinePath)).create(recursive: true);
+    await legacyDb.copy(offlinePath);
+    await _copyIfExists(
+      File('$legacyPath-wal'),
+      File('$offlinePath-wal'),
+    );
+    await _copyIfExists(
+      File('$legacyPath-shm'),
+      File('$offlinePath-shm'),
+    );
+  }
+
+  Future<void> _copyIfExists(File source, File destination) async {
+    if (await source.exists()) {
+      await source.copy(destination.path);
+    }
   }
 
   Future _onCreate(Database db, int version) async {
@@ -39,6 +78,9 @@ class DatabaseHelper {
         deptNumber INTEGER,
         salesPeriod INTEGER,
         description TEXT,
+        updatedAtLocal TEXT,
+        syncStatus TEXT DEFAULT 'synced',
+        isDeleted INTEGER DEFAULT 0,
         serverModifiedAt TEXT,
         modifiedBy INTEGER
       )
@@ -52,6 +94,8 @@ class DatabaseHelper {
         quantity INTEGER,
         registrationDate TEXT,
         isArchived INTEGER DEFAULT 0,
+        updatedAtLocal TEXT,
+        syncStatus TEXT DEFAULT 'synced',
         serverModifiedAt TEXT,
         modifiedBy INTEGER,
         FOREIGN KEY (janCode) REFERENCES products (janCode)
@@ -67,6 +111,12 @@ class DatabaseHelper {
         operation TEXT NOT NULL,
         payload TEXT NOT NULL,
         createdAt TEXT NOT NULL,
+        updatedAtLocal TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        retryCount INTEGER NOT NULL DEFAULT 0,
+        lastError TEXT,
+        conflictPayload TEXT,
+        conflictResolution TEXT,
         synced INTEGER NOT NULL DEFAULT 0
       )
     ''');
@@ -74,6 +124,8 @@ class DatabaseHelper {
     // Create indexes for better performance
     await db.execute(
         'CREATE INDEX idx_sync_queue_synced ON sync_queue(synced)');
+    await db.execute(
+      'CREATE INDEX idx_sync_queue_status ON sync_queue(status)');
     await db.execute(
         'CREATE INDEX idx_sync_queue_createdAt ON sync_queue(createdAt)');
   }
@@ -118,6 +170,12 @@ class DatabaseHelper {
             operation TEXT NOT NULL,
             payload TEXT NOT NULL,
             createdAt TEXT NOT NULL,
+            updatedAtLocal TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'pending',
+            retryCount INTEGER NOT NULL DEFAULT 0,
+            lastError TEXT,
+            conflictPayload TEXT,
+            conflictResolution TEXT,
             synced INTEGER NOT NULL DEFAULT 0
           )
         ''');
@@ -125,23 +183,102 @@ class DatabaseHelper {
         await db.execute(
             'CREATE INDEX idx_sync_queue_synced ON sync_queue(synced)');
         await db.execute(
+            'CREATE INDEX idx_sync_queue_status ON sync_queue(status)');
+        await db.execute(
             'CREATE INDEX idx_sync_queue_createdAt ON sync_queue(createdAt)');
       } catch (e) {
         // Table might already exist
       }
     }
+
+    if (oldVersion < 3) {
+      await _addColumnIfMissing(db, 'products', 'updatedAtLocal', 'TEXT');
+      await _addColumnIfMissing(
+        db,
+        'products',
+        'syncStatus',
+        "TEXT DEFAULT 'synced'",
+      );
+      await _addColumnIfMissing(
+        db,
+        'products',
+        'isDeleted',
+        'INTEGER DEFAULT 0',
+      );
+
+      await _addColumnIfMissing(db, 'inventories', 'updatedAtLocal', 'TEXT');
+      await _addColumnIfMissing(
+        db,
+        'inventories',
+        'syncStatus',
+        "TEXT DEFAULT 'synced'",
+      );
+
+      await _addColumnIfMissing(db, 'sync_queue', 'updatedAtLocal', 'TEXT');
+      await _addColumnIfMissing(
+        db,
+        'sync_queue',
+        'status',
+        "TEXT NOT NULL DEFAULT 'pending'",
+      );
+      await _addColumnIfMissing(
+        db,
+        'sync_queue',
+        'retryCount',
+        'INTEGER NOT NULL DEFAULT 0',
+      );
+      await _addColumnIfMissing(db, 'sync_queue', 'lastError', 'TEXT');
+      await _addColumnIfMissing(db, 'sync_queue', 'conflictPayload', 'TEXT');
+      await _addColumnIfMissing(
+        db,
+        'sync_queue',
+        'conflictResolution',
+        'TEXT',
+      );
+
+      try {
+        await db.execute('CREATE INDEX idx_sync_queue_status ON sync_queue(status)');
+      } catch (_) {
+        // Index might already exist.
+      }
+    }
+  }
+
+  Future<void> _addColumnIfMissing(
+    Database db,
+    String table,
+    String column,
+    String definition,
+  ) async {
+    try {
+      await db.execute('ALTER TABLE $table ADD COLUMN $column $definition');
+    } catch (_) {
+      // Column might already exist.
+    }
   }
 
   // Product operations
-  Future<int> insertProduct(Product product) async {
+  Future<int> insertProduct(
+    Product product, {
+    String syncStatus = 'synced',
+    bool isDeleted = false,
+    String? updatedAtLocal,
+  }) async {
     Database db = await database;
-    return await db.insert('products', product.toMap(),
+    final map = product.toMap();
+    map['updatedAtLocal'] = updatedAtLocal ?? DateTime.now().toIso8601String();
+    map['syncStatus'] = syncStatus;
+    map['isDeleted'] = isDeleted ? 1 : 0;
+    return await db.insert('products', map,
         conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<List<Product>> getProducts() async {
     Database db = await database;
-    final List<Map<String, dynamic>> maps = await db.query('products');
+    final List<Map<String, dynamic>> maps = await db.query(
+      'products',
+      where: 'isDeleted = 0',
+    );
     return List.generate(maps.length, (i) {
       return Product.fromMap(maps[i]);
     });
@@ -160,20 +297,62 @@ class DatabaseHelper {
     return null;
   }
 
-  Future<int> updateProduct(Product product) async {
+  Future<int> updateProduct(
+    Product product, {
+    String syncStatus = 'pending',
+    String? updatedAtLocal,
+  }) async {
     Database db = await database;
+    final map = product.toMap();
+    map['updatedAtLocal'] = updatedAtLocal ?? DateTime.now().toIso8601String();
+    map['syncStatus'] = syncStatus;
+    map['isDeleted'] = 0;
     return await db.update(
       'products',
-      product.toMap(),
+      map,
       where: 'janCode = ?',
       whereArgs: [product.janCode],
     );
   }
 
-  // Inventory operations
-  Future<int> insertInventory(Inventory inventory) async {
+  Future<int> markProductDeleted(
+    String janCode, {
+    String syncStatus = 'pending',
+  }) async {
     Database db = await database;
-    return await db.insert('inventories', inventory.toMap(),
+    return await db.update(
+      'products',
+      {
+        'isDeleted': 1,
+        'syncStatus': syncStatus,
+        'updatedAtLocal': DateTime.now().toIso8601String(),
+      },
+      where: 'janCode = ?',
+      whereArgs: [janCode],
+    );
+  }
+
+  Future<int> setProductSyncStatus(String janCode, String status) async {
+    Database db = await database;
+    return await db.update(
+      'products',
+      {'syncStatus': status},
+      where: 'janCode = ?',
+      whereArgs: [janCode],
+    );
+  }
+
+  // Inventory operations
+  Future<int> insertInventory(
+    Inventory inventory, {
+    String syncStatus = 'synced',
+    String? updatedAtLocal,
+  }) async {
+    Database db = await database;
+    final map = inventory.toMap();
+    map['updatedAtLocal'] = updatedAtLocal ?? DateTime.now().toIso8601String();
+    map['syncStatus'] = syncStatus;
+    return await db.insert('inventories', map,
         conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
@@ -190,24 +369,87 @@ class DatabaseHelper {
     });
   }
 
-  Future<int> archiveInventory(int id) async {
+  Future<int> archiveInventory(
+    int id, {
+    String syncStatus = 'pending',
+  }) async {
     Database db = await database;
     return await db.update(
       'inventories',
-      {'isArchived': 1},
+      {
+        'isArchived': 1,
+        'syncStatus': syncStatus,
+        'updatedAtLocal': DateTime.now().toIso8601String(),
+      },
       where: 'id = ?',
       whereArgs: [id],
     );
   }
 
-  Future<int> updateInventory(Inventory inventory) async {
+  Future<int> updateInventory(
+    Inventory inventory, {
+    String syncStatus = 'pending',
+    String? updatedAtLocal,
+  }) async {
     Database db = await database;
+    final map = inventory.toMap();
+    map['updatedAtLocal'] = updatedAtLocal ?? DateTime.now().toIso8601String();
+    map['syncStatus'] = syncStatus;
     return await db.update(
       'inventories',
-      inventory.toMap(),
+      map,
       where: 'id = ?',
       whereArgs: [inventory.id],
     );
+  }
+
+  Future<int> setInventorySyncStatus(int id, String status) async {
+    Database db = await database;
+    return await db.update(
+      'inventories',
+      {'syncStatus': status},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<void> remapInventoryId({
+    required int localId,
+    required int serverId,
+  }) async {
+    if (localId == serverId) return;
+
+    final db = await database;
+    await db.transaction((txn) async {
+      final rows = await txn.query(
+        'inventories',
+        where: 'id = ?',
+        whereArgs: [localId],
+        limit: 1,
+      );
+      if (rows.isEmpty) return;
+
+      final map = Map<String, dynamic>.from(rows.first);
+      map['id'] = serverId;
+
+      await txn.delete(
+        'inventories',
+        where: 'id = ?',
+        whereArgs: [localId],
+      );
+      await txn.insert(
+        'inventories',
+        map,
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+
+      await txn.update(
+        'sync_queue',
+        {'entityId': serverId.toString()},
+        where: 'entityType = ? AND entityId = ?',
+        whereArgs: ['inventory', localId.toString()],
+      );
+    });
   }
 
   Future<int> deleteInventory(int id) async {
@@ -239,14 +481,21 @@ class DatabaseHelper {
     required String entityId,    // janCode for product, id for inventory
     required String operation,   // 'create', 'update', 'delete'
     required String payload,     // JSON string
+    String status = 'pending',
+    String? conflictResolution,
   }) async {
     Database db = await database;
+    final now = DateTime.now().toIso8601String();
     return await db.insert('sync_queue', {
       'entityType': entityType,
       'entityId': entityId,
       'operation': operation,
       'payload': payload,
-      'createdAt': DateTime.now().toIso8601String(),
+      'createdAt': now,
+      'updatedAtLocal': now,
+      'status': status,
+      'retryCount': 0,
+      'conflictResolution': conflictResolution,
       'synced': 0,
     });
   }
@@ -256,7 +505,7 @@ class DatabaseHelper {
     Database db = await database;
     return await db.query(
       'sync_queue',
-      where: 'synced = 0',
+      where: "status = 'pending'",
       orderBy: 'createdAt ASC',
     );
   }
@@ -268,8 +517,29 @@ class DatabaseHelper {
     Database db = await database;
     return await db.query(
       'sync_queue',
-      where: 'synced = 0 AND entityType = ?',
+      where: "status = 'pending' AND entityType = ?",
       whereArgs: [entityType],
+      orderBy: 'createdAt ASC',
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> getSyncQueueByStatuses({
+    required List<String> statuses,
+    String? entityType,
+  }) async {
+    Database db = await database;
+    final placeholders = List.filled(statuses.length, '?').join(',');
+    final args = <Object?>[...statuses];
+    var where = 'status IN ($placeholders)';
+    if (entityType != null) {
+      where = '$where AND entityType = ?';
+      args.add(entityType);
+    }
+
+    return await db.query(
+      'sync_queue',
+      where: where,
+      whereArgs: args,
       orderBy: 'createdAt ASC',
     );
   }
@@ -279,9 +549,55 @@ class DatabaseHelper {
     Database db = await database;
     return await db.update(
       'sync_queue',
-      {'synced': 1},
+      {'synced': 1, 'status': 'synced'},
       where: 'id = ?',
       whereArgs: [id],
+    );
+  }
+
+  Future<int> updateSyncQueueStatus(
+    int id,
+    String status, {
+    String? lastError,
+    String? conflictPayload,
+    String? conflictResolution,
+    bool incrementRetry = false,
+  }) async {
+    Database db = await database;
+    final current = await db.query(
+      'sync_queue',
+      columns: ['retryCount'],
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+
+    final retryCount = current.isNotEmpty
+        ? (current.first['retryCount'] as int? ?? 0)
+        : 0;
+
+    return await db.update(
+      'sync_queue',
+      {
+        'status': status,
+        'lastError': lastError,
+        'conflictPayload': conflictPayload,
+        'conflictResolution': conflictResolution,
+        'retryCount': incrementRetry ? retryCount + 1 : retryCount,
+        'updatedAtLocal': DateTime.now().toIso8601String(),
+        'synced': status == 'synced' ? 1 : 0,
+      },
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> getConflictedQueueItems() async {
+    Database db = await database;
+    return await db.query(
+      'sync_queue',
+      where: "status = 'conflict'",
+      orderBy: 'createdAt ASC',
     );
   }
 
@@ -300,7 +616,7 @@ class DatabaseHelper {
     Database db = await database;
     return await db.delete(
       'sync_queue',
-      where: 'synced = 1',
+      where: "status = 'synced' OR synced = 1",
     );
   }
 

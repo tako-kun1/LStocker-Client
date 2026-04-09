@@ -30,7 +30,8 @@ class _ProductRegistrationScreenState extends State<ProductRegistrationScreen> {
   bool _isEditing = false;
 
   String _normalizeJan(String value) {
-    return value.replaceAll(RegExp(r'\s+'), '');
+    final digits = value.replaceAll(RegExp(r'[^0-9]'), '');
+    return digits.length > 13 ? digits.substring(0, 13) : digits;
   }
 
   @override
@@ -151,7 +152,10 @@ class _ProductRegistrationScreenState extends State<ProductRegistrationScreen> {
                       decoration: const InputDecoration(labelText: 'JANコード'),
                       keyboardType: TextInputType.number,
                       textInputAction: TextInputAction.next,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(13),
+                      ],
                       onFieldSubmitted: (_) => FocusScope.of(context).nextFocus(),
                       validator: (v) => v == null || v.isEmpty ? '入力してください' : null,
                     ),

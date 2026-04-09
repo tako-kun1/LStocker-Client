@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 import '../providers/settings_provider.dart';
+import '../services/sync_service.dart';
+import '../services/version_check_service.dart';
+import 'sync_conflict_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -13,6 +16,10 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   late TextEditingController _urlController;
   late Future<PackageInfo> _packageInfoFuture;
+  bool _syncing = false;
+  bool _checkingUpdate = false;
+  final _syncService = SyncService();
+  final _versionCheckService = VersionCheckService();
 
   @override
   void initState() {
@@ -56,6 +63,74 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onChanged: (v) => settings.setPushNotificationsEnabled(v),
               ),
               const SizedBox(height: 24),
+              const Text('アップデート設定', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              SwitchListTile(
+                title: const Text('起動時にアップデートを自動確認する'),
+                value: settings.autoCheckUpdateOnStartup,
+                onChanged: (v) => settings.setAutoCheckUpdateOnStartup(v),
+              ),
+              FutureBuilder<DateTime?>(
+                future: _versionCheckService.getLastCheckedAt(),
+                builder: (context, snapshot) {
+                  final checked = snapshot.data;
+                  final text = checked == null
+                      ? '最終確認: 未実施'
+                      : '最終確認: ${checked.toLocal().toString().substring(0, 19)}';
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Text(text),
+                  );
+                },
+              ),
+              ElevatedButton.icon(
+                onPressed: _checkingUpdate
+                    ? null
+                    : () async {
+                        setState(() => _checkingUpdate = true);
+                        try {
+                          final result = await _versionCheckService.checkForUpdate(force: true);
+                          if (!context.mounted) return;
+
+                          if (result.updateAvailable) {
+                            final min = (result.minSupportedVersion == null || result.minSupportedVersion!.isEmpty)
+                                ? ''
+                                : '\n最小対応: ${result.minSupportedVersion}';
+                            showDialog<void>(
+                              context: context,
+                              builder: (dialogContext) => AlertDialog(
+                                title: const Text('アップデートがあります'),
+                                content: Text(
+                                  '現在: ${result.currentVersion}\n最新: ${result.latestVersion}$min',
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(dialogContext),
+                                    child: const Text('閉じる'),
+                                  ),
+                                ],
+                              ),
+                            );
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('最新版です。')),
+                            );
+                          }
+                        } finally {
+                          if (mounted) {
+                            setState(() => _checkingUpdate = false);
+                          }
+                        }
+                      },
+                icon: _checkingUpdate
+                    ? const SizedBox(
+                        height: 18,
+                        width: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.system_update),
+                label: Text(_checkingUpdate ? '確認中...' : 'アップデートを確認する'),
+              ),
+              const SizedBox(height: 24),
               const Text('同期設定', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               DropdownButtonFormField<String>(
                 initialValue: settings.syncTiming,
@@ -67,16 +142,49 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               const SizedBox(height: 32),
               ElevatedButton.icon(
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('手動同期を開始します... (機能未実装)')),
-                  );
-                },
-                icon: const Icon(Icons.sync),
-                label: const Text('今すぐサーバーと同期する'),
+                onPressed: _syncing
+                    ? null
+                    : () async {
+                        setState(() => _syncing = true);
+                        try {
+                          final result = await _syncService.manualFullSync();
+                          if (!context.mounted) return;
+                          final message = result.success
+                              ? '同期完了: push ${result.totalApplied}件 / pull ${result.totalReceived}件'
+                              : '同期失敗: ${result.productsResult.error ?? result.inventoriesResult.error ?? 'unknown error'}';
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(message)),
+                          );
+                        } finally {
+                          if (mounted) {
+                            setState(() => _syncing = false);
+                          }
+                        }
+                      },
+                icon: _syncing
+                    ? const SizedBox(
+                        height: 18,
+                        width: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.sync),
+                label: Text(_syncing ? '同期中...' : '今すぐサーバーと同期する'),
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.all(16),
                 ),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const SyncConflictScreen(),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.warning_amber_rounded),
+                label: const Text('同期競合を解決する'),
               ),
               const SizedBox(height: 32),
               FutureBuilder<PackageInfo>(

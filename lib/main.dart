@@ -6,26 +6,29 @@ import 'providers/inventory_provider.dart';
 import 'providers/settings_provider.dart';
 import 'services/dept_service.dart';
 import 'services/api_client.dart';
+import 'services/app_config.dart';
 import 'services/sync_service.dart';
 import 'views/startup_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await DeptService.loadDepts();
-
-  // API クライアント初期化
   final settingsProvider = SettingsProvider();
-  await settingsProvider.loadSettings();
+  final syncService = SyncService();
+
+  await Future.wait([
+    DeptService.loadDepts(),
+    settingsProvider.loadSettings(),
+    syncService.initialize(),
+  ]);
   
+  // API クライアント初期化
   final apiClient = ApiClient();
-  final baseUrl = settingsProvider.serverUrl;
+  final baseUrl = settingsProvider.serverUrl.isNotEmpty
+      ? settingsProvider.serverUrl
+      : AppConfig.defaultBaseUrl;
   if (baseUrl.isNotEmpty) {
     await apiClient.initialize(baseUrl);
   }
-
-  // Sync サービス初期化
-  final syncService = SyncService();
-  await syncService.initialize();
 
   runApp(
     MultiProvider(

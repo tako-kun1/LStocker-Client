@@ -48,6 +48,7 @@ dependencies:
   dio: ^5.4.0
   connectivity_plus: ^5.0.0
   package_info_plus: ^8.0.2
+  url_launcher: ^6.3.2
   json_annotation: ^4.8.1
 
 dev_dependencies:

@@ -1,11 +1,26 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
+import 'api_service.dart';
 
 class DeptService {
   static final Map<int, String> _deptMap = {};
+  static final ApiService _apiService = ApiService();
 
   static Future<void> loadDepts() async {
     if (_deptMap.isNotEmpty) return;
+
+    try {
+      final response = await _apiService.getDepartments();
+      for (final dept in response.departments) {
+        _deptMap[dept.deptNumber] = dept.name;
+      }
+      if (_deptMap.isNotEmpty) {
+        return;
+      }
+    } catch (_) {
+      // fallback to local asset
+    }
+
     try {
       final String content = await rootBundle.loadString('assets/dept.txt');
       final lines = content.split('\n');

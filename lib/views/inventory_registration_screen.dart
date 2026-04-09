@@ -25,7 +25,8 @@ class _InventoryRegistrationScreenState extends State<InventoryRegistrationScree
   bool _isLoading = false;
 
   String _normalizeJan(String value) {
-    return value.replaceAll(RegExp(r'\s+'), '');
+    final digits = value.replaceAll(RegExp(r'[^0-9]'), '');
+    return digits.length > 13 ? digits.substring(0, 13) : digits;
   }
 
   @override
@@ -151,7 +152,10 @@ class _InventoryRegistrationScreenState extends State<InventoryRegistrationScree
                     decoration: const InputDecoration(labelText: 'JANコード'),
                     keyboardType: TextInputType.number,
                     textInputAction: TextInputAction.done,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(13),
+                    ],
                     onFieldSubmitted: (value) => _searchProduct(value),
                   ),
                 ),

@@ -17,7 +17,7 @@ class ProductProvider with ChangeNotifier {
 
   Future<void> addProduct(Product product) async {
     // ローカル DB に追加
-    await _dbHelper.insertProduct(product);
+    await _dbHelper.insertProduct(product, syncStatus: 'pending');
 
     // Sync queue に追加（サーバーがある場合）
     await _syncService.queueProductChange(
@@ -35,7 +35,7 @@ class ProductProvider with ChangeNotifier {
 
   Future<void> updateProduct(Product product) async {
     // ローカル DB を更新
-    await _dbHelper.updateProduct(product);
+    await _dbHelper.updateProduct(product, syncStatus: 'pending');
 
     // Sync queue に追加（サーバーがある場合）
     await _syncService.queueProductChange(
@@ -53,5 +53,20 @@ class ProductProvider with ChangeNotifier {
 
   Future<Product?> getProduct(String janCode) async {
     return await _dbHelper.getProduct(janCode);
+  }
+
+  Future<void> deleteProduct(Product product) async {
+    await _dbHelper.markProductDeleted(product.janCode, syncStatus: 'pending');
+    await _syncService.queueProductChange(
+      janCode: product.janCode,
+      name: product.name,
+      description: product.description,
+      imagePath: product.imagePath,
+      deptNumber: product.deptNumber,
+      salesPeriod: product.salesPeriod,
+      operation: 'delete',
+    );
+
+    await fetchProducts();
   }
 }
