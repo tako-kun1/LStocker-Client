@@ -119,7 +119,7 @@ class VersionCheckService {
       final response = await _dio.get(AppConfig.githubLatestReleaseApi);
       final data = response.data as Map<String, dynamic>;
 
-      final latestVersion = _normalizeVersion((data['tag_name'] as String?) ?? '0.0.0');
+      final latestVersion = _resolveLatestVersion(data);
       final releaseBody = (data['body'] as String?) ?? '';
       final minSupported = _extractMinSupportedVersion(releaseBody);
       final forceUpdate = _extractForceUpdate(releaseBody);
@@ -258,5 +258,22 @@ class VersionCheckService {
     }
 
     return 0;
+  }
+
+  String _resolveLatestVersion(Map<String, dynamic> releaseJson) {
+    final candidates = <String>[
+      (releaseJson['tag_name'] as String?) ?? '',
+      (releaseJson['name'] as String?) ?? '',
+      (releaseJson['body'] as String?) ?? '',
+    ];
+
+    for (final raw in candidates) {
+      final normalized = _normalizeVersion(raw);
+      if (normalized != '0.0.0') {
+        return normalized;
+      }
+    }
+
+    return '0.0.0';
   }
 }
