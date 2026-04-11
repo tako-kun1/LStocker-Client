@@ -31,13 +31,11 @@ class OfflineDbService {
     }
 
     final activePath = await getActiveDatabasePath();
-    if (activePath == null) {
-      return false;
-    }
-
-    final activeDb = File(activePath);
-    if (await activeDb.exists()) {
-      return false;
+    if (activePath != null) {
+      final activeDb = File(activePath);
+      if (await activeDb.exists()) {
+        return false;
+      }
     }
 
     final legacyPath = await findLegacyDatabasePath();
@@ -58,9 +56,9 @@ class OfflineDbService {
       return null;
     }
 
-    final candidates = <String>[];
-
-    candidates.add('/storage/emulated/0/Documents/LStocker/$dbFileName');
+    final candidates = <String>{
+      '/storage/emulated/0/Documents/LStocker/$dbFileName',
+    };
 
     final externalDir = await getExternalStorageDirectory();
     if (externalDir != null) {
@@ -71,10 +69,14 @@ class OfflineDbService {
 
     candidates.add(join(await getDatabasesPath(), 'bardber.db'));
 
-    for (final path in candidates) {
-      final file = File(path);
-      if (await file.exists()) {
-        return path;
+    final ordered = candidates.toList(growable: false);
+    final existsResults = await Future.wait(
+      ordered.map((path) => File(path).exists()),
+    );
+
+    for (var i = 0; i < ordered.length; i++) {
+      if (existsResults[i]) {
+        return ordered[i];
       }
     }
 

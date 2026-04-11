@@ -35,6 +35,7 @@ class _StartupScreenState extends State<StartupScreen> {
   }
 
   Future<void> _initializeApp() async {
+    final sw = Stopwatch()..start();
     final productProvider = context.read<ProductProvider>();
     final inventoryProvider = context.read<InventoryProvider>();
     final settingsProvider = context.read<SettingsProvider>();
@@ -44,6 +45,7 @@ class _StartupScreenState extends State<StartupScreen> {
     }
 
     final shouldPrompt = await _offlineDbService.shouldPromptForLegacyImport();
+    debugPrint('[Startup] legacy check: ${sw.elapsedMilliseconds}ms');
 
     if (!mounted) {
       return;
@@ -62,36 +64,30 @@ class _StartupScreenState extends State<StartupScreen> {
       }
 
       await _offlineDbService.markLegacyImportHandled();
-    } else {
-      await _offlineDbService.markLegacyImportHandled();
     }
 
     if (!mounted) {
       return;
     }
 
-    final updateResult = settingsProvider.autoCheckUpdateOnStartup
-      ? await _versionCheckService.checkForUpdate()
-      : await _versionCheckService.getCachedResult();
+    final cachedUpdateResult = await _versionCheckService.getCachedResult();
+    if (settingsProvider.autoCheckUpdateOnStartup) {
+      _runUpdateCheckInBackground();
+    }
 
     if (!mounted) {
       return;
     }
 
-    if (updateResult != null &&
-        updateResult.updateAvailable) {
-      if (updateResult.isRequired) {
-        await _showRequiredUpdateDialog(updateResult);
+    if (cachedUpdateResult != null &&
+        cachedUpdateResult.updateAvailable &&
+        cachedUpdateResult.isRequired) {
+      await _showRequiredUpdateDialog(cachedUpdateResult);
         return;
-      }
-
-      await _showOptionalUpdateDialog(updateResult);
     }
 
-    await Future.wait([
-      productProvider.fetchProducts(),
-      inventoryProvider.fetchInventories(),
-    ]);
+    await _loadInitialDataSafely(productProvider, inventoryProvider);
+    debugPrint('[Startup] initial data loaded: ${sw.elapsedMilliseconds}ms');
 
     _runStartupSyncInBackground(productProvider, inventoryProvider);
 
@@ -102,6 +98,29 @@ class _StartupScreenState extends State<StartupScreen> {
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(builder: (_) => const HomeScreen()),
     );
+    debugPrint('[Startup] home displayed: ${sw.elapsedMilliseconds}ms');
+  }
+
+  void _runUpdateCheckInBackground() {
+    unawaited(
+      Future<void>(() async {
+        try {
+          await _versionCheckService.checkForUpdate();
+        } catch (_) {
+          // 起動体験を優先するため、更新確認失敗は無視。
+        }
+      }),
+    );
+  }
+
+  Future<void> _loadInitialDataSafely(
+    ProductProvider productProvider,
+    InventoryProvider inventoryProvider,
+  ) async {
+    await Future.wait([
+      productProvider.fetchProducts().catchError((_) {}),
+      inventoryProvider.fetchInventories().catchError((_) {}),
+    ]);
   }
 
   void _runStartupSyncInBackground(
@@ -187,47 +206,6 @@ class _StartupScreenState extends State<StartupScreen> {
                 await SystemNavigator.pop();
               },
               child: const Text('更新ページを開く'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Future<void> _showOptionalUpdateDialog(VersionCheckResult result) async {
-    await showDialog<void>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('アップデートがあります'),
-          content: Text(
-            '現在のバージョン: ${result.currentVersion}\n'
-            '最新バージョン: ${result.latestVersion}\n\n'
-            '更新を行いますか？',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('あとで'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                final apkUrl = result.apkUrl ?? AppConfig.githubReleasesPageUrl;
-                final uri = Uri.tryParse(apkUrl);
-                if (uri == null) {
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('更新URLの形式が不正です。')),
-                  );
-                  return;
-                }
-
-                await launchUrl(uri, mode: LaunchMode.externalApplication);
-                if (context.mounted) {
-                  Navigator.of(context).pop();
-                }
-              },
-              child: const Text('更新する'),
             ),
           ],
         );
