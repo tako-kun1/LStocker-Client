@@ -10,9 +10,11 @@ import '../providers/product_provider.dart';
 import '../providers/settings_provider.dart';
 import '../services/app_config.dart';
 import '../services/offline_db_service.dart';
+import '../services/product_key_service.dart';
 import '../services/sync_service.dart';
 import '../services/version_check_service.dart';
 import 'home_screen.dart';
+import 'license_activation_screen.dart';
 
 class StartupScreen extends StatefulWidget {
   const StartupScreen({super.key});
@@ -25,6 +27,7 @@ class _StartupScreenState extends State<StartupScreen> {
   final OfflineDbService _offlineDbService = OfflineDbService();
   final SyncService _syncService = SyncService();
   final VersionCheckService _versionCheckService = VersionCheckService();
+  final ProductKeyService _productKeyService = ProductKeyService();
 
   @override
   void initState() {
@@ -68,6 +71,32 @@ class _StartupScreenState extends State<StartupScreen> {
 
     if (!mounted) {
       return;
+    }
+
+    final activated = await _productKeyService.isActivated();
+    if (!mounted) {
+      return;
+    }
+
+    if (!activated) {
+      final result = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(builder: (_) => const LicenseActivationScreen()),
+      );
+      if (!mounted) {
+        return;
+      }
+      if (result != true) {
+        await SystemNavigator.pop();
+        return;
+      }
+    } else {
+      unawaited(
+        Future<void>(() async {
+          try {
+            await _productKeyService.checkLicenseStatus();
+          } catch (_) {}
+        }),
+      );
     }
 
     final cachedUpdateResult = await _versionCheckService.getCachedResult();

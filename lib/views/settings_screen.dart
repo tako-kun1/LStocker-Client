@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 import '../providers/settings_provider.dart';
+import '../services/product_key_service.dart';
 import '../services/sync_service.dart';
 import '../services/version_check_service.dart';
+import 'license_activation_screen.dart';
 import 'sync_conflict_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -18,9 +20,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late Future<PackageInfo> _packageInfoFuture;
   bool _syncing = false;
   bool _checkingUpdate = false;
+  bool _checkingLicense = false;
   DateTime? _lastUpdateCheckedAt;
   final _syncService = SyncService();
   final _versionCheckService = VersionCheckService();
+  final _productKeyService = ProductKeyService();
 
   @override
   void initState() {
@@ -71,6 +75,68 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 title: const Text('プッシュ通知を有効にする'),
                 value: settings.pushNotificationsEnabled,
                 onChanged: (v) => settings.setPushNotificationsEnabled(v),
+              ),
+              const SizedBox(height: 24),
+              const Text('ライセンス設定', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              FutureBuilder<String>(
+                future: _productKeyService.getMaskedProductKey(),
+                builder: (context, snapshot) {
+                  final masked = snapshot.data ?? '読み込み中...';
+                  return Text('登録キー: $masked');
+                },
+              ),
+              const SizedBox(height: 4),
+              FutureBuilder<String>(
+                future: _productKeyService.getLicenseSummary(),
+                builder: (context, snapshot) {
+                  final summary = snapshot.data ?? 'status=unknown / mode=unknown';
+                  return Text('ライセンス状態: $summary');
+                },
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: () async {
+                  final result = await Navigator.of(context).push<bool>(
+                    MaterialPageRoute(
+                      builder: (_) => const LicenseActivationScreen(),
+                    ),
+                  );
+                  if (!mounted) return;
+                  if (result == true) {
+                    setState(() {});
+                  }
+                },
+                icon: const Icon(Icons.verified_user),
+                label: const Text('プロダクトキーを再登録する'),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: _checkingLicense
+                    ? null
+                    : () async {
+                        setState(() => _checkingLicense = true);
+                        try {
+                          final result = await _productKeyService.checkLicenseStatus();
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(result.message)),
+                          );
+                          setState(() {});
+                        } finally {
+                          if (mounted) {
+                            setState(() => _checkingLicense = false);
+                          }
+                        }
+                      },
+                icon: _checkingLicense
+                    ? const SizedBox(
+                        height: 18,
+                        width: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.cloud_done),
+                label: Text(_checkingLicense ? '確認中...' : 'ライセンス状態を確認する'),
               ),
               const SizedBox(height: 24),
               const Text('アップデート設定', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
