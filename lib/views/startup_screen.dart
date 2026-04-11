@@ -43,11 +43,18 @@ class _StartupScreenState extends State<StartupScreen> {
     final inventoryProvider = context.read<InventoryProvider>();
     final settingsProvider = context.read<SettingsProvider>();
 
+    // 起動体験を優先し、独立タスクは先に並列で開始する。
+    final legacyPromptFuture = _offlineDbService
+        .shouldPromptForLegacyImport()
+        .timeout(const Duration(seconds: 2), onTimeout: () => false);
+    final activatedFuture = _productKeyService.isActivated();
+    final cachedUpdateResultFuture = _versionCheckService.getCachedResult();
+
     if (!mounted) {
       return;
     }
 
-    final shouldPrompt = await _offlineDbService.shouldPromptForLegacyImport();
+    final shouldPrompt = await legacyPromptFuture;
     debugPrint('[Startup] legacy check: ${sw.elapsedMilliseconds}ms');
 
     if (!mounted) {
@@ -73,7 +80,7 @@ class _StartupScreenState extends State<StartupScreen> {
       return;
     }
 
-    final activated = await _productKeyService.isActivated();
+    final activated = await activatedFuture;
     if (!mounted) {
       return;
     }
@@ -93,13 +100,13 @@ class _StartupScreenState extends State<StartupScreen> {
       unawaited(
         Future<void>(() async {
           try {
-            await _productKeyService.checkLicenseStatus();
+            await _productKeyService.checkLicenseStatusIfDue();
           } catch (_) {}
         }),
       );
     }
 
-    final cachedUpdateResult = await _versionCheckService.getCachedResult();
+    final cachedUpdateResult = await cachedUpdateResultFuture;
     if (settingsProvider.autoCheckUpdateOnStartup) {
       _runUpdateCheckInBackground();
     }
@@ -147,8 +154,14 @@ class _StartupScreenState extends State<StartupScreen> {
     InventoryProvider inventoryProvider,
   ) async {
     await Future.wait([
-      productProvider.fetchProducts().catchError((_) {}),
-      inventoryProvider.fetchInventories().catchError((_) {}),
+      productProvider
+          .fetchProducts()
+          .timeout(const Duration(seconds: 2), onTimeout: () {})
+          .catchError((_) {}),
+      inventoryProvider
+          .fetchInventories()
+          .timeout(const Duration(seconds: 2), onTimeout: () {})
+          .catchError((_) {}),
     ]);
   }
 

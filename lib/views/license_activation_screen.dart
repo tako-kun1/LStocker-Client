@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../services/product_key_service.dart';
 
@@ -54,14 +55,22 @@ class _LicenseActivationScreenState extends State<LicenseActivationScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const Text('プロダクトキーを入力してください。'),
+              const SizedBox(height: 4),
+              const Text(
+                '形式: XXXX-XXXX-XXXX-XXXX（英大文字・数字）',
+                style: TextStyle(fontSize: 12, color: Colors.black54),
+              ),
               const SizedBox(height: 12),
               TextField(
                 controller: _controller,
                 decoration: const InputDecoration(
                   labelText: 'プロダクトキー',
-                  hintText: 'ABCD-1234-EFGH-5678',
+                  hintText: 'XXXX-XXXX-XXXX-XXXX',
                   border: OutlineInputBorder(),
                 ),
+                inputFormatters: const [
+                  _ProductKeyTextFormatter(),
+                ],
                 textInputAction: TextInputAction.done,
                 onSubmitted: (_) => _activate(),
               ),
@@ -74,6 +83,33 @@ class _LicenseActivationScreenState extends State<LicenseActivationScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _ProductKeyTextFormatter extends TextInputFormatter {
+  const _ProductKeyTextFormatter();
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final raw = newValue.text.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
+    final clipped = raw.length > 16 ? raw.substring(0, 16) : raw;
+
+    final buffer = StringBuffer();
+    for (var i = 0; i < clipped.length; i++) {
+      if (i > 0 && i % 4 == 0) {
+        buffer.write('-');
+      }
+      buffer.write(clipped[i]);
+    }
+
+    final formatted = buffer.toString();
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
     );
   }
 }

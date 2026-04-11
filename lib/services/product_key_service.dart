@@ -33,6 +33,9 @@ class ProductKeyStatusResult {
 }
 
 class ProductKeyService {
+  // Product key format: XXXX-XXXX-XXXX-XXXX (A-Z, 0-9)
+  static const String keyFormatPattern = 'XXXX-XXXX-XXXX-XXXX';
+  static const int keyRawLength = 16;
   static const _keyProduct = 'license_product_key';
   static const _keyActivated = 'license_is_activated';
   static const _keyActivatedAt = 'license_activated_at';
@@ -42,6 +45,7 @@ class ProductKeyService {
   static const _keyLicenseStatus = 'license_status';
   static const _keyPolicyMode = 'license_policy_mode';
   static const _keyLastCheckedAt = 'license_last_checked_at';
+  static const Duration _autoCheckInterval = Duration(hours: 24);
 
   final Dio _dio = Dio(
     BaseOptions(
@@ -223,11 +227,38 @@ class ProductKeyService {
     }
   }
 
+  Future<ProductKeyStatusResult> checkLicenseStatusIfDue() async {
+    final due = await _isDailyCheckDue();
+    if (!due) {
+      return const ProductKeyStatusResult(
+        success: true,
+        message: 'ライセンス確認は本日実施済みです。',
+      );
+    }
+
+    return checkLicenseStatus();
+  }
+
   Future<String> getLicenseSummary() async {
     final prefs = await SharedPreferences.getInstance();
     final status = prefs.getString(_keyLicenseStatus) ?? 'unknown';
     final mode = prefs.getString(_keyPolicyMode) ?? 'full';
     return 'status=$status / mode=$mode';
+  }
+
+  Future<bool> _isDailyCheckDue() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_keyLastCheckedAt);
+    if (raw == null || raw.isEmpty) {
+      return true;
+    }
+
+    final lastChecked = DateTime.tryParse(raw);
+    if (lastChecked == null) {
+      return true;
+    }
+
+    return DateTime.now().difference(lastChecked) >= _autoCheckInterval;
   }
 
   Future<void> clearActivation() async {
@@ -243,11 +274,23 @@ class ProductKeyService {
   }
 
   String _normalize(String input) {
-    return input.trim().toUpperCase().replaceAll(' ', '');
+    final raw = input
+        .trim()
+        .toUpperCase()
+        .replaceAll(RegExp(r'[^A-Z0-9]'), '');
+
+    if (raw.length != keyRawLength) {
+      return raw;
+    }
+
+    return '${raw.substring(0, 4)}-'
+        '${raw.substring(4, 8)}-'
+        '${raw.substring(8, 12)}-'
+        '${raw.substring(12, 16)}';
   }
 
   bool _isValidFormat(String key) {
-    // 例: ABCD-1234-EFGH-5678
+    // 形式: XXXX-XXXX-XXXX-XXXX（A-Z,0-9）
     final regex = RegExp(r'^[A-Z0-9]{4}(?:-[A-Z0-9]{4}){3}$');
     return regex.hasMatch(key);
   }

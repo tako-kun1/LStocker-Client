@@ -39,7 +39,13 @@ class OfflineDbService {
     }
 
     final legacyPath = await findLegacyDatabasePath();
-    return legacyPath != null;
+    if (legacyPath == null) {
+      // 旧DBが存在しない環境では、毎回の探索コストを避ける。
+      await markLegacyImportHandled();
+      return false;
+    }
+
+    return true;
   }
 
   Future<void> markLegacyImportHandled() async {
