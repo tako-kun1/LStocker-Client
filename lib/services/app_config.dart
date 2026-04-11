@@ -21,7 +21,7 @@ class AppConfig {
 
   static const String licenseAuthServerBaseUrl = String.fromEnvironment(
     'LICENSE_AUTH_SERVER_BASE_URL',
-    defaultValue: 'https://auth.nazono.cloud:9001',
+    defaultValue: 'https://auth.nazono.cloud',
   );
 
   static String get defaultBaseUrl {

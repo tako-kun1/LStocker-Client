@@ -5,10 +5,10 @@ LStocker Client は、店舗向けの商品情報・在庫情報を管理する 
 
 ## リリース情報
 
-- 現在バージョン: `1.0.5-dev2+8`
+- 現在バージョン: `1.0.5-dev3+9`
 - 主要追加機能:
 	- プロダクトキー認証
-	- 認証サーバー連携 (`https://auth.nazono.cloud:9001`)
+	- 認証サーバー連携 (`https://auth.nazono.cloud`)
 	- 設定画面からのライセンス状態確認
 
 ## 主な機能
@@ -63,7 +63,7 @@ flutter run
 - `API_BASE_URL_DEV`
 - `API_BASE_URL_STG`
 - `API_BASE_URL_PROD`
-- `LICENSE_AUTH_SERVER_BASE_URL` (既定: `https://auth.nazono.cloud:9001`)
+- `LICENSE_AUTH_SERVER_BASE_URL` (既定: `https://auth.nazono.cloud`)
 
 例:
 
@@ -71,7 +71,7 @@ flutter run
 flutter run \
 	--dart-define=APP_ENV=prod \
 	--dart-define=API_BASE_URL_PROD=https://api.example.com \
-	--dart-define=LICENSE_AUTH_SERVER_BASE_URL=https://auth.nazono.cloud:9001
+	--dart-define=LICENSE_AUTH_SERVER_BASE_URL=https://auth.nazono.cloud
 ```
 
 ## 開発でよく使うコマンド
