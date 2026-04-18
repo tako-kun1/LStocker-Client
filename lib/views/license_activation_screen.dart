@@ -48,7 +48,10 @@ class _LicenseActivationScreenState extends State<LicenseActivationScreen> {
     return PopScope(
       canPop: false,
       child: Scaffold(
-        appBar: AppBar(title: const Text('プロダクトキー認証')),
+        appBar: AppBar(
+          automaticallyImplyLeading: false,
+          title: const Text('プロダクトキー認証'),
+        ),
         body: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
