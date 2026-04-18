@@ -1,4 +1,9 @@
 class AppConfig {
+  static const bool enableProductKeyAuth = bool.fromEnvironment(
+    'ENABLE_PRODUCT_KEY_AUTH',
+    defaultValue: true,
+  );
+
   static const String appEnv = String.fromEnvironment(
     'APP_ENV',
     defaultValue: 'dev',
@@ -21,7 +26,7 @@ class AppConfig {
 
   static const String licenseAuthServerBaseUrl = String.fromEnvironment(
     'LICENSE_AUTH_SERVER_BASE_URL',
-    defaultValue: 'https://auth.nazono.cloud',
+    defaultValue: 'https://auth.nazono.cloud:8443',
   );
 
   static String get defaultBaseUrl {

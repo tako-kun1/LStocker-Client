@@ -1,9 +1,6 @@
-import 'dart:convert';
-import 'dart:io';
 import 'dart:math';
 
 import 'package:dio/dio.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app_config.dart';
@@ -46,6 +43,7 @@ class ProductKeyService {
   static const _keyPolicyMode = 'license_policy_mode';
   static const _keyLastCheckedAt = 'license_last_checked_at';
   static const Duration _autoCheckInterval = Duration(hours: 24);
+  static const String _statusOk = 'ok';
 
   final Dio _dio = Dio(
     BaseOptions(
@@ -90,27 +88,26 @@ class ProductKeyService {
 
     try {
       final prefs = await SharedPreferences.getInstance();
-      final packageInfo = await PackageInfo.fromPlatform();
       final deviceId = await _getOrCreateDeviceId(prefs);
-      final challenge = _createChallenge();
+      final idempotencyKey = _createIdempotencyKey();
 
       final response = await _dio.post<Map<String, dynamic>>(
         '/api/v1/license/activate',
-        data: {
-          'product_key': normalized,
-          'device': {
-            'device_id': deviceId,
-            'device_name': _deviceName(),
-            'platform': _platformName(),
-            'app_version': '${packageInfo.version}+${packageInfo.buildNumber}',
+        options: Options(
+          headers: {
+            'Content-Type': 'application/json',
+            'Idempotency-Key': idempotencyKey,
           },
-          'challenge': challenge,
+        ),
+        data: {
+          'license_key': normalized,
+          'device_id': deviceId,
         },
       );
 
       final body = response.data ?? const <String, dynamic>{};
       final status = body['status'] as String?;
-      if (status != 'success') {
+      if (status != _statusOk) {
         return ProductKeyActivationResult(
           success: false,
           message: _extractErrorMessage(body) ?? '認証サーバーの応答が不正です。',
@@ -119,10 +116,27 @@ class ProductKeyService {
 
       final data = (body['data'] as Map?)?.cast<String, dynamic>() ??
           const <String, dynamic>{};
+      final result = (data['result'] ?? '').toString();
+      if (result != _statusOk) {
+        return ProductKeyActivationResult(
+          success: false,
+          message: _extractErrorMessage(body) ?? '認証サーバーの応答が不正です。',
+        );
+      }
+
+      final responseLicenseKey = (data['license_key'] ?? '').toString();
+      if (responseLicenseKey.isEmpty) {
+        return const ProductKeyActivationResult(
+          success: false,
+          message: 'ライセンスキーがレスポンスに含まれていません。',
+        );
+      }
+
       await prefs.setString(_keyProduct, normalized);
       await prefs.setBool(_keyActivated, true);
       await prefs.setString(_keyActivatedAt, DateTime.now().toIso8601String());
       await prefs.setString(_keyDeviceId, deviceId);
+      // 互換のため license_id は保持（未提供なら空文字）
       await prefs.setString(_keyLicenseId, (data['license_id'] ?? '').toString());
       await prefs.setString(
         _keyOfflineToken,
@@ -130,13 +144,13 @@ class ProductKeyService {
       );
       await prefs.setString(
         _keyLicenseStatus,
-        (data['license_status'] ?? 'active').toString(),
+        (data['status'] ?? 'unknown').toString(),
       );
 
-      final policy = (data['policy'] as Map?)?.cast<String, dynamic>();
+      final policy = (data['policy'] ?? 'full').toString();
       await prefs.setString(
         _keyPolicyMode,
-        (policy?['mode'] ?? 'full').toString(),
+        policy,
       );
       await prefs.setString(_keyLastCheckedAt, DateTime.now().toIso8601String());
 
@@ -159,12 +173,11 @@ class ProductKeyService {
 
   Future<ProductKeyStatusResult> checkLicenseStatus() async {
     final prefs = await SharedPreferences.getInstance();
-    final licenseId = prefs.getString(_keyLicenseId);
+    final licenseKey = prefs.getString(_keyProduct);
     final offlineToken = prefs.getString(_keyOfflineToken);
     final deviceId = prefs.getString(_keyDeviceId);
 
-    if ((licenseId == null || licenseId.isEmpty) ||
-        (offlineToken == null || offlineToken.isEmpty) ||
+    if ((licenseKey == null || licenseKey.isEmpty) ||
         (deviceId == null || deviceId.isEmpty)) {
       return const ProductKeyStatusResult(
         success: false,
@@ -173,20 +186,29 @@ class ProductKeyService {
     }
 
     try {
-      final packageInfo = await PackageInfo.fromPlatform();
+      final idempotencyKey = _createIdempotencyKey();
+      final request = <String, dynamic>{
+        'license_key': licenseKey,
+        'device_id': deviceId,
+      };
+      if (offlineToken != null && offlineToken.isNotEmpty) {
+        request['offline_token'] = offlineToken;
+      }
+
       final response = await _dio.post<Map<String, dynamic>>(
         '/api/v1/license/heartbeat',
-        data: {
-          'license_id': licenseId,
-          'device_id': deviceId,
-          'offline_token': offlineToken,
-          'app_version': '${packageInfo.version}+${packageInfo.buildNumber}',
-        },
+        options: Options(
+          headers: {
+            'Content-Type': 'application/json',
+            'Idempotency-Key': idempotencyKey,
+          },
+        ),
+        data: request,
       );
 
       final body = response.data ?? const <String, dynamic>{};
       final status = body['status'] as String?;
-      if (status != 'success') {
+      if (status != _statusOk) {
         return ProductKeyStatusResult(
           success: false,
           message: _extractErrorMessage(body) ?? 'ライセンス確認に失敗しました。',
@@ -195,9 +217,16 @@ class ProductKeyService {
 
       final data = (body['data'] as Map?)?.cast<String, dynamic>() ??
           const <String, dynamic>{};
-      final licenseStatus = (data['license_status'] ?? 'unknown').toString();
-      final policy = (data['policy'] as Map?)?.cast<String, dynamic>();
-      final mode = (policy?['mode'] ?? 'full').toString();
+      final result = (data['result'] ?? '').toString();
+      if (result != _statusOk) {
+        return ProductKeyStatusResult(
+          success: false,
+          message: _extractErrorMessage(body) ?? 'ライセンス確認に失敗しました。',
+        );
+      }
+
+      final licenseStatus = (data['status'] ?? 'unknown').toString();
+      final mode = (data['policy'] ?? 'full').toString();
 
       await prefs.setString(_keyLicenseStatus, licenseStatus);
       await prefs.setString(_keyPolicyMode, mode);
@@ -306,9 +335,8 @@ class ProductKeyService {
     return created;
   }
 
-  String _createChallenge() {
-    final bytes = List<int>.generate(32, (_) => Random.secure().nextInt(256));
-    return base64UrlEncode(bytes);
+  String _createIdempotencyKey() {
+    return _createPseudoUuid();
   }
 
   String _createPseudoUuid() {
@@ -321,23 +349,6 @@ class ProductKeyService {
         '${hex.substring(12, 16)}-'
         '${hex.substring(16, 20)}-'
         '${hex.substring(20, 32)}';
-  }
-
-  String _platformName() {
-    if (Platform.isAndroid) return 'android';
-    if (Platform.isIOS) return 'ios';
-    if (Platform.isWindows) return 'windows';
-    if (Platform.isMacOS) return 'macos';
-    if (Platform.isLinux) return 'linux';
-    return 'unknown';
-  }
-
-  String _deviceName() {
-    final host = Platform.localHostname.trim();
-    if (host.isNotEmpty) {
-      return host;
-    }
-    return _platformName();
   }
 
   String _messageFromDio(DioException e) {
@@ -361,6 +372,11 @@ class ProductKeyService {
       final message = error['message'];
       if (message is String && message.isNotEmpty) {
         return message;
+      }
+
+      final code = error['code'];
+      if (code is String && code.isNotEmpty) {
+        return code;
       }
     }
     return null;

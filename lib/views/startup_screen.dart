@@ -47,7 +47,9 @@ class _StartupScreenState extends State<StartupScreen> {
     final legacyPromptFuture = _offlineDbService
         .shouldPromptForLegacyImport()
         .timeout(const Duration(seconds: 2), onTimeout: () => false);
-    final activatedFuture = _productKeyService.isActivated();
+    final activatedFuture = AppConfig.enableProductKeyAuth
+      ? _productKeyService.isActivated()
+      : Future<bool>.value(true);
     final cachedUpdateResultFuture = _versionCheckService.getCachedResult();
 
     if (!mounted) {
@@ -85,7 +87,7 @@ class _StartupScreenState extends State<StartupScreen> {
       return;
     }
 
-    if (!activated) {
+    if (AppConfig.enableProductKeyAuth && !activated) {
       final result = await Navigator.of(context).push<bool>(
         MaterialPageRoute(builder: (_) => const LicenseActivationScreen()),
       );
@@ -96,7 +98,7 @@ class _StartupScreenState extends State<StartupScreen> {
         await SystemNavigator.pop();
         return;
       }
-    } else {
+    } else if (AppConfig.enableProductKeyAuth) {
       unawaited(
         Future<void>(() async {
           try {
