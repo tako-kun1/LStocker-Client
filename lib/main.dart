@@ -9,6 +9,7 @@ import 'providers/settings_provider.dart';
 import 'services/dept_service.dart';
 import 'services/api_client.dart';
 import 'services/app_config.dart';
+import 'services/notification_service.dart';
 import 'services/sync_service.dart';
 import 'views/startup_screen.dart';
 
@@ -23,8 +24,11 @@ void main() async {
     settingsProvider.loadSettings(),
     syncService.initialize(),
   ]);
+  await NotificationService().initialize(
+    requestPermissions: settingsProvider.pushNotificationsEnabled,
+  );
   debugPrint('[Main] bootstrap completed in ${sw.elapsedMilliseconds}ms');
-  
+
   // API クライアント初期化
   final apiClient = ApiClient();
   final baseUrl = settingsProvider.serverUrl.isNotEmpty
@@ -77,7 +81,9 @@ class LStockerApp extends StatelessWidget {
       title: 'LStocker',
       theme: baseTheme.copyWith(
         textTheme: GoogleFonts.notoSansJpTextTheme(baseTheme.textTheme),
-        primaryTextTheme: GoogleFonts.notoSansJpTextTheme(baseTheme.primaryTextTheme),
+        primaryTextTheme: GoogleFonts.notoSansJpTextTheme(
+          baseTheme.primaryTextTheme,
+        ),
       ),
       home: const StartupScreen(),
     );

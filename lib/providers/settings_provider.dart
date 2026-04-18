@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_client.dart';
 import '../services/app_config.dart';
+import '../services/notification_service.dart';
 
 class SettingsProvider with ChangeNotifier {
   static const String barcodeScanMethodCamera = 'camera';
@@ -28,7 +29,8 @@ class SettingsProvider with ChangeNotifier {
   Future<void> loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     _serverUrl = prefs.getString('serverUrl') ?? AppConfig.defaultBaseUrl;
-    _pushNotificationsEnabled = prefs.getBool('pushNotificationsEnabled') ?? true;
+    _pushNotificationsEnabled =
+        prefs.getBool('pushNotificationsEnabled') ?? true;
     _syncTiming = prefs.getString('syncTiming') ?? 'Manual';
     _barcodeScanMethod = _normalizeBarcodeScanMethod(
       prefs.getString('barcodeScanMethod'),
@@ -56,6 +58,11 @@ class SettingsProvider with ChangeNotifier {
     _pushNotificationsEnabled = enabled;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('pushNotificationsEnabled', enabled);
+    if (enabled) {
+      await NotificationService().initialize();
+    } else {
+      await NotificationService().clearActiveNotifications(resetState: true);
+    }
     notifyListeners();
   }
 
