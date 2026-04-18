@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -12,6 +14,7 @@ import 'views/startup_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  final sw = Stopwatch()..start();
   final settingsProvider = SettingsProvider();
   final syncService = SyncService();
 
@@ -20,6 +23,7 @@ void main() async {
     settingsProvider.loadSettings(),
     syncService.initialize(),
   ]);
+  debugPrint('[Main] bootstrap completed in ${sw.elapsedMilliseconds}ms');
   
   // API クライアント初期化
   final apiClient = ApiClient();
@@ -28,7 +32,10 @@ void main() async {
       : AppConfig.defaultBaseUrl;
   if (baseUrl.isNotEmpty) {
     await apiClient.initialize(baseUrl);
+    debugPrint('[Main] api client initialized for $baseUrl');
   }
+
+  unawaited(DeptService.loadDepts());
 
   runApp(
     MultiProvider(

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 import '../models/product.dart';
@@ -20,9 +21,11 @@ class DatabaseHelper {
   }
 
   Future<Database> _initDatabase() async {
+    final sw = Stopwatch()..start();
     final offlineDbService = OfflineDbService();
     final offlinePath = await offlineDbService.getActiveDatabasePath();
     final legacyPath = join(await getDatabasesPath(), 'bardber.db');
+    debugPrint('[Database] init started; offlinePath=$offlinePath legacyPath=$legacyPath');
 
     if (offlinePath != null) {
       await _migrateLegacyInternalDbIfNeeded(
@@ -32,12 +35,21 @@ class DatabaseHelper {
     }
 
     final path = offlinePath ?? legacyPath;
-    return await openDatabase(
+    final pathExists = await File(path).exists();
+    debugPrint('[Database] opening path=$path exists=$pathExists');
+
+    final db = await openDatabase(
       path,
       version: 3,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
+      onOpen: (db) async {
+        await _ensurePerformanceIndexes(db);
+        debugPrint('[Database] opened path=${db.path}');
+      },
     );
+    debugPrint('[Database] init completed in ${sw.elapsedMilliseconds}ms');
+    return db;
   }
 
   Future<void> _migrateLegacyInternalDbIfNeeded({
@@ -46,8 +58,13 @@ class DatabaseHelper {
   }) async {
     final legacyDb = File(legacyPath);
     final offlineDb = File(offlinePath);
+    final legacyExists = await legacyDb.exists();
+    final offlineExists = await offlineDb.exists();
+    debugPrint(
+      '[Database] migration check legacyExists=$legacyExists offlineExists=$offlineExists',
+    );
 
-    if (!await legacyDb.exists() || await offlineDb.exists()) {
+    if (!legacyExists || offlineExists) {
       return;
     }
 
@@ -61,6 +78,7 @@ class DatabaseHelper {
       File('$legacyPath-shm'),
       File('$offlinePath-shm'),
     );
+    debugPrint('[Database] migrated legacy internal database to $offlinePath');
   }
 
   Future<void> _copyIfExists(File source, File destination) async {
@@ -121,13 +139,7 @@ class DatabaseHelper {
       )
     ''');
 
-    // Create indexes for better performance
-    await db.execute(
-        'CREATE INDEX idx_sync_queue_synced ON sync_queue(synced)');
-    await db.execute(
-      'CREATE INDEX idx_sync_queue_status ON sync_queue(status)');
-    await db.execute(
-        'CREATE INDEX idx_sync_queue_createdAt ON sync_queue(createdAt)');
+    await _ensurePerformanceIndexes(db);
   }
 
   Future _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -242,6 +254,8 @@ class DatabaseHelper {
         // Index might already exist.
       }
     }
+
+    await _ensurePerformanceIndexes(db);
   }
 
   Future<void> _addColumnIfMissing(
@@ -254,6 +268,21 @@ class DatabaseHelper {
       await db.execute('ALTER TABLE $table ADD COLUMN $column $definition');
     } catch (_) {
       // Column might already exist.
+    }
+  }
+
+  Future<void> _ensurePerformanceIndexes(Database db) async {
+    const statements = [
+      'CREATE INDEX IF NOT EXISTS idx_products_isDeleted ON products(isDeleted)',
+      'CREATE INDEX IF NOT EXISTS idx_inventories_isArchived_expirationDate ON inventories(isArchived, expirationDate)',
+      'CREATE INDEX IF NOT EXISTS idx_inventories_janCode ON inventories(janCode)',
+      'CREATE INDEX IF NOT EXISTS idx_sync_queue_synced ON sync_queue(synced)',
+      'CREATE INDEX IF NOT EXISTS idx_sync_queue_status ON sync_queue(status)',
+      'CREATE INDEX IF NOT EXISTS idx_sync_queue_createdAt ON sync_queue(createdAt)',
+    ];
+
+    for (final statement in statements) {
+      await db.execute(statement);
     }
   }
 

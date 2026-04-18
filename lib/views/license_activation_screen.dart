@@ -68,6 +68,10 @@ class _LicenseActivationScreenState extends State<LicenseActivationScreen> {
                   hintText: 'XXXX-XXXX-XXXX-XXXX',
                   border: OutlineInputBorder(),
                 ),
+                keyboardType: TextInputType.visiblePassword,
+                textCapitalization: TextCapitalization.characters,
+                autocorrect: false,
+                enableSuggestions: false,
                 inputFormatters: const [
                   _ProductKeyTextFormatter(),
                 ],

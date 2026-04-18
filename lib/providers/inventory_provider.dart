@@ -20,8 +20,15 @@ class InventoryProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      _inventories = await _dbHelper.getInventories();
-      _inventoriesWithProduct = await _dbHelper.getInventoriesWithProduct();
+      final sw = Stopwatch()..start();
+      final inventoriesWithProduct = await _dbHelper.getInventoriesWithProduct();
+      _inventoriesWithProduct = inventoriesWithProduct;
+      _inventories = inventoriesWithProduct
+          .map((item) => Inventory.fromMap(item))
+          .toList(growable: false);
+      debugPrint(
+        '[InventoryProvider] loaded ${_inventories.length} inventories in ${sw.elapsedMilliseconds}ms',
+      );
     } finally {
       _isLoading = false;
       notifyListeners();

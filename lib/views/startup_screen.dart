@@ -42,6 +42,7 @@ class _StartupScreenState extends State<StartupScreen> {
     final productProvider = context.read<ProductProvider>();
     final inventoryProvider = context.read<InventoryProvider>();
     final settingsProvider = context.read<SettingsProvider>();
+    debugPrint('[Startup] initialize started');
 
     // 起動体験を優先し、独立タスクは先に並列で開始する。
     final legacyPromptFuture = _offlineDbService
@@ -57,7 +58,7 @@ class _StartupScreenState extends State<StartupScreen> {
     }
 
     final shouldPrompt = await legacyPromptFuture;
-    debugPrint('[Startup] legacy check: ${sw.elapsedMilliseconds}ms');
+    debugPrint('[Startup] legacy check finished in ${sw.elapsedMilliseconds}ms; shouldPrompt=$shouldPrompt');
 
     if (!mounted) {
       return;
@@ -71,8 +72,10 @@ class _StartupScreenState extends State<StartupScreen> {
 
       if (shouldLoad) {
         await _offlineDbService.importLegacyDatabaseToActive();
+        debugPrint('[Startup] legacy import completed');
       } else {
         await _offlineDbService.archiveLegacySourceDatabase();
+        debugPrint('[Startup] legacy database archived by user choice');
       }
 
       await _offlineDbService.markLegacyImportHandled();
@@ -83,6 +86,7 @@ class _StartupScreenState extends State<StartupScreen> {
     }
 
     final activated = await activatedFuture;
+    debugPrint('[Startup] activation state resolved in ${sw.elapsedMilliseconds}ms; activated=$activated');
     if (!mounted) {
       return;
     }
@@ -109,6 +113,7 @@ class _StartupScreenState extends State<StartupScreen> {
     }
 
     final cachedUpdateResult = await cachedUpdateResultFuture;
+    debugPrint('[Startup] cached update check resolved in ${sw.elapsedMilliseconds}ms');
     if (settingsProvider.autoCheckUpdateOnStartup) {
       _runUpdateCheckInBackground();
     }
@@ -125,7 +130,9 @@ class _StartupScreenState extends State<StartupScreen> {
     }
 
     await _loadInitialDataSafely(productProvider, inventoryProvider);
-    debugPrint('[Startup] initial data loaded: ${sw.elapsedMilliseconds}ms');
+    debugPrint(
+      '[Startup] initial data loaded in ${sw.elapsedMilliseconds}ms; products=${productProvider.products.length} inventories=${inventoryProvider.inventories.length}',
+    );
 
     _runStartupSyncInBackground(productProvider, inventoryProvider);
 
@@ -155,6 +162,7 @@ class _StartupScreenState extends State<StartupScreen> {
     ProductProvider productProvider,
     InventoryProvider inventoryProvider,
   ) async {
+    final sw = Stopwatch()..start();
     await Future.wait([
       productProvider
           .fetchProducts()
@@ -165,6 +173,7 @@ class _StartupScreenState extends State<StartupScreen> {
           .timeout(const Duration(seconds: 2), onTimeout: () {})
           .catchError((_) {}),
     ]);
+            debugPrint('[Startup] _loadInitialDataSafely finished in ${sw.elapsedMilliseconds}ms');
   }
 
   void _runStartupSyncInBackground(
@@ -173,14 +182,17 @@ class _StartupScreenState extends State<StartupScreen> {
   ) {
     unawaited(
       Future<void>(() async {
+        final sw = Stopwatch()..start();
         try {
           await _syncService.manualFullSync().timeout(const Duration(seconds: 8));
           await Future.wait([
             productProvider.fetchProducts(),
             inventoryProvider.fetchInventories(),
           ]);
+          debugPrint('[Startup] background sync completed in ${sw.elapsedMilliseconds}ms');
         } catch (_) {
           // 起動体験を優先するため、同期失敗はここでは握りつぶす。
+          debugPrint('[Startup] background sync failed after ${sw.elapsedMilliseconds}ms');
         }
       }),
     );

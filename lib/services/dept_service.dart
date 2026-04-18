@@ -5,24 +5,49 @@ import 'api_service.dart';
 class DeptService {
   static final Map<int, String> _deptMap = {};
   static final ApiService _apiService = ApiService();
+  static bool _remoteRefreshStarted = false;
 
   static Future<void> loadDepts() async {
-    if (_deptMap.isNotEmpty) return;
-
-    try {
-      final response = await _apiService.getDepartments();
-      for (final dept in response.departments) {
-        _deptMap[dept.deptNumber] = dept.name;
-      }
-      if (_deptMap.isNotEmpty) {
-        return;
-      }
-    } catch (_) {
-      // fallback to local asset
+    if (_deptMap.isEmpty) {
+      await _loadFromAsset();
     }
 
+    if (_deptMap.isEmpty) {
+      await _refreshFromApi();
+      return;
+    }
+
+    if (_remoteRefreshStarted) {
+      return;
+    }
+
+    _remoteRefreshStarted = true;
+    _refreshFromApi();
+  }
+
+  static Future<void> _refreshFromApi() async {
+    try {
+      final response = await _apiService.getDepartments();
+      final nextMap = <int, String>{};
+      for (final dept in response.departments) {
+        nextMap[dept.deptNumber] = dept.name;
+      }
+      if (nextMap.isNotEmpty) {
+        _deptMap
+          ..clear()
+          ..addAll(nextMap);
+        debugPrint('[DeptService] loaded ${_deptMap.length} departments from API');
+        return;
+      }
+    } catch (e) {
+      debugPrint('[DeptService] API department load failed: $e');
+    }
+  }
+
+  static Future<void> _loadFromAsset() async {
     try {
       final String content = await rootBundle.loadString('assets/dept.txt');
+      final nextMap = <int, String>{};
       final lines = content.split('\n');
       for (var line in lines) {
         line = line.trim();
@@ -31,9 +56,15 @@ class DeptService {
         if (parts.length >= 2) {
           final int? id = int.tryParse(parts[0]);
           if (id != null) {
-            _deptMap[id] = parts[1];
+            nextMap[id] = parts[1];
           }
         }
+      }
+      if (nextMap.isNotEmpty) {
+        _deptMap
+          ..clear()
+          ..addAll(nextMap);
+        debugPrint('[DeptService] loaded ${_deptMap.length} departments from asset');
       }
     } catch (e) {
       debugPrint('Error loading depts: $e');
