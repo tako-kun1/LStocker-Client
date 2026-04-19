@@ -1,14 +1,15 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_client.dart';
-import '../services/app_config.dart';
 import '../services/notification_service.dart';
 
 class SettingsProvider with ChangeNotifier {
   static const String barcodeScanMethodCamera = 'camera';
   static const String barcodeScanMethodDeviceReader = 'device_reader';
+  static const String _legacyServerUrlKey = 'serverUrl';
+  static const String _backupServerUrlKey = 'backupServerUrl';
 
-  String _serverUrl = '';
+  String _backupServerUrl = '';
   bool _pushNotificationsEnabled = true;
   String _syncTiming = 'Manual';
   String _barcodeScanMethod = barcodeScanMethodCamera;
@@ -17,7 +18,7 @@ class SettingsProvider with ChangeNotifier {
   String? _username;
   bool _isLoggedIn = false;
 
-  String get serverUrl => _serverUrl;
+  String get backupServerUrl => _backupServerUrl;
   bool get pushNotificationsEnabled => _pushNotificationsEnabled;
   String get syncTiming => _syncTiming;
   String get barcodeScanMethod => _barcodeScanMethod;
@@ -28,7 +29,10 @@ class SettingsProvider with ChangeNotifier {
 
   Future<void> loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
-    _serverUrl = prefs.getString('serverUrl') ?? AppConfig.defaultBaseUrl;
+    _backupServerUrl =
+        prefs.getString(_backupServerUrlKey) ??
+        prefs.getString(_legacyServerUrlKey) ??
+        '';
     _pushNotificationsEnabled =
         prefs.getBool('pushNotificationsEnabled') ?? true;
     _syncTiming = prefs.getString('syncTiming') ?? 'Manual';
@@ -47,10 +51,10 @@ class SettingsProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> setServerUrl(String url) async {
-    _serverUrl = url;
+  Future<void> setBackupServerUrl(String url) async {
+    _backupServerUrl = url;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('serverUrl', url);
+    await prefs.setString(_backupServerUrlKey, url);
     notifyListeners();
   }
 

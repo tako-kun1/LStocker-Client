@@ -31,9 +31,7 @@ void main() async {
 
   // API クライアント初期化
   final apiClient = ApiClient();
-  final baseUrl = settingsProvider.serverUrl.isNotEmpty
-      ? settingsProvider.serverUrl
-      : AppConfig.defaultBaseUrl;
+  final baseUrl = AppConfig.defaultBaseUrl;
   if (baseUrl.isNotEmpty) {
     await apiClient.initialize(baseUrl);
     debugPrint('[Main] api client initialized for $baseUrl');
