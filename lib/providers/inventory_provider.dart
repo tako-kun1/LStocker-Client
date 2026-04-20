@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import '../models/inventory.dart';
 import '../services/database_helper.dart';
+import '../services/inventory_backup_scheduler.dart';
 import '../services/notification_service.dart';
 
 class InventoryProvider with ChangeNotifier {
@@ -69,6 +72,7 @@ class InventoryProvider with ChangeNotifier {
       await _dbHelper.insertInventory(inventory, syncStatus: 'synced');
 
       await fetchInventories();
+      unawaited(InventoryBackupScheduler().handleInventoryChanged());
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -79,11 +83,13 @@ class InventoryProvider with ChangeNotifier {
     await _dbHelper.archiveInventory(id, syncStatus: 'synced');
 
     await fetchInventories();
+    unawaited(InventoryBackupScheduler().handleInventoryChanged());
   }
 
   Future<void> deleteInventory(int id) async {
     await _dbHelper.archiveInventory(id, syncStatus: 'synced');
 
     await fetchInventories();
+    unawaited(InventoryBackupScheduler().handleInventoryChanged());
   }
 }

@@ -9,6 +9,7 @@ import 'providers/settings_provider.dart';
 import 'services/dept_service.dart';
 import 'services/api_client.dart';
 import 'services/app_config.dart';
+import 'services/inventory_backup_scheduler.dart';
 import 'services/notification_service.dart';
 import 'services/sync_service.dart';
 import 'views/startup_screen.dart';
@@ -38,6 +39,8 @@ void main() async {
     await apiClient.initialize(baseUrl);
     debugPrint('[Main] api client initialized for $baseUrl');
   }
+
+  InventoryBackupScheduler().initialize(settingsProvider);
 
   unawaited(DeptService.loadDepts());
 

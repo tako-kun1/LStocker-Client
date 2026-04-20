@@ -5,7 +5,7 @@ import '../providers/settings_provider.dart';
 import '../services/app_config.dart';
 import '../services/app_update_service.dart';
 import '../services/backup_server_service.dart';
-import '../services/inventory_backup_service.dart';
+import '../services/inventory_backup_scheduler.dart';
 import '../services/product_key_service.dart';
 import '../services/version_check_service.dart';
 import 'license_activation_screen.dart';
@@ -25,13 +25,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _checkingBackupServer = false;
   bool _uploadingBackup = false;
   DateTime? _lastUpdateCheckedAt;
+  DateTime? _lastBackupUploadedAt;
   String? _backupServerCheckMessage;
   bool? _backupServerCheckSucceeded;
   String? _updateProgressMessage;
   double? _updateProgressValue;
   final _appUpdateService = AppUpdateService();
   final _backupServerService = BackupServerService();
-  final _inventoryBackupService = InventoryBackupService();
+  final _inventoryBackupScheduler = InventoryBackupScheduler();
   final _versionCheckService = VersionCheckService();
   final _productKeyService = ProductKeyService();
 
@@ -44,6 +45,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
     _packageInfoFuture = PackageInfo.fromPlatform();
     _loadLastCheckedAt();
+    _loadLastBackupUploadedAt();
   }
 
   Future<void> _loadLastCheckedAt() async {
@@ -51,6 +53,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (!mounted) return;
     setState(() {
       _lastUpdateCheckedAt = checkedAt;
+    });
+  }
+
+  Future<void> _loadLastBackupUploadedAt() async {
+    final uploadedAt = await _inventoryBackupScheduler.getLastUploadedAt();
+    if (!mounted) return;
+    setState(() {
+      _lastBackupUploadedAt = uploadedAt;
     });
   }
 
@@ -326,6 +336,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 title: '在庫バックアップ設定',
                 icon: Icons.cloud_upload_outlined,
                 children: [
+                  DropdownButtonFormField<String>(
+                    initialValue: settings.syncTiming,
+                    decoration: const InputDecoration(
+                      labelText: 'バックアップ実行タイミング',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                        value: SettingsProvider.backupTimingManual,
+                        child: Text('手動のみ'),
+                      ),
+                      DropdownMenuItem(
+                        value: SettingsProvider.backupTimingOnStartup,
+                        child: Text('起動時'),
+                      ),
+                      DropdownMenuItem(
+                        value: SettingsProvider.backupTimingEveryHour,
+                        child: Text('1時間ごと'),
+                      ),
+                      DropdownMenuItem(
+                        value: SettingsProvider.backupTimingOnChange,
+                        child: Text('在庫更新時'),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        settings.setSyncTiming(value);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    _lastBackupUploadedAt == null
+                        ? '最終バックアップ: 未実施'
+                        : '最終バックアップ: ${_lastBackupUploadedAt!.toLocal().toString().substring(0, 19)}',
+                  ),
+                  const SizedBox(height: 12),
                   Text(
                     'バックアップ対象は在庫状況データのみです。\n'
                     '最新バックアップのダウンロードは、プロダクトキー認証成功時に自動で実行されます。',
@@ -338,12 +385,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         : () async {
                             setState(() => _uploadingBackup = true);
                             try {
-                              final result = await _inventoryBackupService
-                                  .uploadCurrentInventoryBackup();
+                              final result = await _inventoryBackupScheduler
+                                  .uploadNow();
                               if (!context.mounted) return;
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(content: Text(result.message)),
                               );
+                              await _loadLastBackupUploadedAt();
                             } finally {
                               if (mounted) {
                                 setState(() => _uploadingBackup = false);
@@ -366,7 +414,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    'プロダクトキーごとの最新在庫バックアップをサーバーに保存します。',
+                    '選択したタイミングで自動保存できます。手動保存もいつでも実行できます。',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ],

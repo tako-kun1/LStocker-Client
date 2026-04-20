@@ -10,6 +10,7 @@ import '../providers/product_provider.dart';
 import '../providers/settings_provider.dart';
 import '../services/app_config.dart';
 import '../services/app_update_service.dart';
+import '../services/inventory_backup_scheduler.dart';
 import '../services/offline_db_service.dart';
 import '../services/product_key_service.dart';
 import '../services/version_check_service.dart';
@@ -151,6 +152,8 @@ class _StartupScreenState extends State<StartupScreen> {
     debugPrint(
       '[Startup] initial data loaded in ${sw.elapsedMilliseconds}ms; products=${productProvider.products.length} inventories=${inventoryProvider.inventories.length}',
     );
+
+    unawaited(InventoryBackupScheduler().handleAppReady());
 
     if (!mounted) {
       return;

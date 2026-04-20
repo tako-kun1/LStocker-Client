@@ -6,12 +6,16 @@ import '../services/notification_service.dart';
 class SettingsProvider with ChangeNotifier {
   static const String barcodeScanMethodCamera = 'camera';
   static const String barcodeScanMethodDeviceReader = 'device_reader';
+  static const String backupTimingManual = 'Manual';
+  static const String backupTimingOnStartup = 'On Startup';
+  static const String backupTimingEveryHour = 'Every Hour';
+  static const String backupTimingOnChange = 'On Change';
   static const String _legacyServerUrlKey = 'serverUrl';
   static const String _backupServerUrlKey = 'backupServerUrl';
 
   String _backupServerUrl = '';
   bool _pushNotificationsEnabled = true;
-  String _syncTiming = 'Manual';
+  String _syncTiming = backupTimingManual;
   String _barcodeScanMethod = barcodeScanMethodCamera;
   bool _autoCheckUpdateOnStartup = true;
   int? _userId;
@@ -35,7 +39,7 @@ class SettingsProvider with ChangeNotifier {
         '';
     _pushNotificationsEnabled =
         prefs.getBool('pushNotificationsEnabled') ?? true;
-    _syncTiming = prefs.getString('syncTiming') ?? 'Manual';
+    _syncTiming = _normalizeBackupTiming(prefs.getString('syncTiming'));
     _barcodeScanMethod = _normalizeBarcodeScanMethod(
       prefs.getString('barcodeScanMethod'),
     );
@@ -71,9 +75,9 @@ class SettingsProvider with ChangeNotifier {
   }
 
   Future<void> setSyncTiming(String timing) async {
-    _syncTiming = timing;
+    _syncTiming = _normalizeBackupTiming(timing);
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('syncTiming', timing);
+    await prefs.setString('syncTiming', _syncTiming);
     notifyListeners();
   }
 
@@ -125,5 +129,19 @@ class SettingsProvider with ChangeNotifier {
       return barcodeScanMethodDeviceReader;
     }
     return barcodeScanMethodCamera;
+  }
+
+  String _normalizeBackupTiming(String? timing) {
+    switch (timing) {
+      case backupTimingOnStartup:
+        return backupTimingOnStartup;
+      case backupTimingEveryHour:
+        return backupTimingEveryHour;
+      case backupTimingOnChange:
+        return backupTimingOnChange;
+      case backupTimingManual:
+      default:
+        return backupTimingManual;
+    }
   }
 }
