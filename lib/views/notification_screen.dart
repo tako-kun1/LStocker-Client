@@ -36,21 +36,29 @@ class _NotificationScreenState extends State<NotificationScreen> {
             itemBuilder: (context, index) {
               final item = notifications[index];
               final expirationDate = DateTime.parse(item['expirationDate']);
-              final salesPeriod = item['salesPeriod'] as int;
-              final notificationDate = expirationDate.subtract(Duration(days: salesPeriod));
+              final salesPeriod = (item['salesPeriod'] as num?)?.toInt() ?? 0;
+              final itemName = (item['name'] ?? item['janCode'] ?? '未登録商品')
+                  .toString();
+              final notificationDate = expirationDate.subtract(
+                Duration(days: salesPeriod),
+              );
               final isOverdue = notificationDate.isBefore(DateTime.now());
 
               return Card(
-                color: isOverdue ? const Color.fromARGB(255, 199, 227, 249) : Colors.blue[50],
+                color: isOverdue
+                    ? const Color.fromARGB(255, 199, 227, 249)
+                    : Colors.blue[50],
                 margin: const EdgeInsets.symmetric(vertical: 8),
                 child: ListTile(
                   leading: Icon(
                     Icons.warning_amber_rounded,
-                    color: isOverdue ? const Color.fromARGB(255, 255, 145, 0) : const Color.fromARGB(200, 245, 127, 42),
+                    color: isOverdue
+                        ? const Color.fromARGB(255, 255, 145, 0)
+                        : const Color.fromARGB(200, 245, 127, 42),
                     size: 40,
                   ),
                   title: Text(
-                    '${item['name']} の期限が近づいています',
+                    '$itemName の期限が近づいています',
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                   subtitle: Text(
@@ -60,7 +68,9 @@ class _NotificationScreenState extends State<NotificationScreen> {
                   onTap: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (_) => const InventoryStatusScreen()),
+                      MaterialPageRoute(
+                        builder: (_) => const InventoryStatusScreen(),
+                      ),
                     );
                   },
                 ),

@@ -3,12 +3,12 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 import '../providers/settings_provider.dart';
 import '../services/app_config.dart';
+import '../services/app_update_service.dart';
 import '../services/backup_server_service.dart';
+import '../services/inventory_backup_service.dart';
 import '../services/product_key_service.dart';
-import '../services/sync_service.dart';
 import '../services/version_check_service.dart';
 import 'license_activation_screen.dart';
-import 'sync_conflict_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -20,15 +20,18 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   late TextEditingController _backupUrlController;
   late Future<PackageInfo> _packageInfoFuture;
-  bool _syncing = false;
   bool _checkingUpdate = false;
   bool _checkingLicense = false;
   bool _checkingBackupServer = false;
+  bool _uploadingBackup = false;
   DateTime? _lastUpdateCheckedAt;
   String? _backupServerCheckMessage;
   bool? _backupServerCheckSucceeded;
-  final _syncService = SyncService();
+  String? _updateProgressMessage;
+  double? _updateProgressValue;
+  final _appUpdateService = AppUpdateService();
   final _backupServerService = BackupServerService();
+  final _inventoryBackupService = InventoryBackupService();
   final _versionCheckService = VersionCheckService();
   final _productKeyService = ProductKeyService();
 
@@ -78,6 +81,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
         });
       }
     }
+  }
+
+  void _handleUpdateProgress(String message, double? progress) {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _updateProgressMessage = message;
+      _updateProgressValue = progress;
+    });
   }
 
   @override
@@ -140,7 +153,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   const SizedBox(height: 8),
                   Text(
                     '商品DBと在庫情報のバックアップ接続先として保存されます。'
-                    '業務APIの同期先変更には使用しません。',
+                    'バックアップ同期設定と手動同期はこの接続先を使用します。',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ],
@@ -253,33 +266,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         : () async {
                             setState(() => _checkingUpdate = true);
                             try {
+                              setState(() {
+                                _updateProgressMessage = null;
+                                _updateProgressValue = null;
+                              });
                               final result = await _versionCheckService
                                   .checkForUpdate(force: true);
                               if (!context.mounted) return;
 
                               if (result.updateAvailable) {
-                                final min =
-                                    (result.minSupportedVersion == null ||
-                                        result.minSupportedVersion!.isEmpty)
-                                    ? ''
-                                    : '\n最小対応: ${result.minSupportedVersion}';
-                                showDialog<void>(
-                                  context: context,
-                                  builder: (dialogContext) => AlertDialog(
-                                    title: const Text('アップデートがあります'),
-                                    content: Text(
-                                      '現在: ${result.currentVersion}\n最新: ${result.latestVersion}$min',
-                                    ),
-                                    actions: [
-                                      TextButton(
-                                        onPressed: () =>
-                                            Navigator.pop(dialogContext),
-                                        child: const Text('閉じる'),
-                                      ),
-                                    ],
+                                final installResult = await _appUpdateService
+                                    .installUpdate(
+                                      result,
+                                      onProgress: _handleUpdateProgress,
+                                    );
+                                if (!context.mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(installResult.message),
                                   ),
                                 );
                               } else {
+                                setState(() {
+                                  _updateProgressMessage = null;
+                                  _updateProgressValue = null;
+                                });
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(content: Text('最新版です。')),
                                 );
@@ -300,70 +311,63 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         : const Icon(Icons.system_update),
                     label: Text(_checkingUpdate ? '確認中...' : 'アップデートを確認する'),
                   ),
+                  if (_updateProgressMessage != null) ...[
+                    const SizedBox(height: 12),
+                    Text(_updateProgressMessage!),
+                  ],
+                  if (_updateProgressValue != null) ...[
+                    const SizedBox(height: 8),
+                    LinearProgressIndicator(value: _updateProgressValue),
+                  ],
                 ],
               ),
               _buildSection(
                 context,
-                title: '同期設定',
-                icon: Icons.sync_outlined,
+                title: '在庫バックアップ設定',
+                icon: Icons.cloud_upload_outlined,
                 children: [
-                  DropdownButtonFormField<String>(
-                    initialValue: settings.syncTiming,
-                    decoration: const InputDecoration(labelText: '同期タイミング'),
-                    items: ['Manual', 'On Startup', 'Every Hour', 'On Change']
-                        .map((t) {
-                          return DropdownMenuItem(value: t, child: Text(t));
-                        })
-                        .toList(),
-                    onChanged: (v) =>
-                        v != null ? settings.setSyncTiming(v) : null,
+                  Text(
+                    'バックアップ対象は在庫状況データのみです。\n'
+                    '最新バックアップのダウンロードは、プロダクトキー認証成功時に自動で実行されます。',
+                    style: Theme.of(context).textTheme.bodyMedium,
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 20),
                   ElevatedButton.icon(
-                    onPressed: _syncing
+                    onPressed: _uploadingBackup
                         ? null
                         : () async {
-                            setState(() => _syncing = true);
+                            setState(() => _uploadingBackup = true);
                             try {
-                              final result = await _syncService
-                                  .manualFullSync();
+                              final result = await _inventoryBackupService
+                                  .uploadCurrentInventoryBackup();
                               if (!context.mounted) return;
-                              final message = result.success
-                                  ? '同期完了: push ${result.totalApplied}件 / pull ${result.totalReceived}件'
-                                  : '同期失敗: ${result.productsResult.error ?? result.inventoriesResult.error ?? 'unknown error'}';
-                              ScaffoldMessenger.of(
-                                context,
-                              ).showSnackBar(SnackBar(content: Text(message)));
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text(result.message)),
+                              );
                             } finally {
                               if (mounted) {
-                                setState(() => _syncing = false);
+                                setState(() => _uploadingBackup = false);
                               }
                             }
                           },
-                    icon: _syncing
+                    icon: _uploadingBackup
                         ? const SizedBox(
                             height: 18,
                             width: 18,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : const Icon(Icons.sync),
-                    label: Text(_syncing ? '同期中...' : '今すぐサーバーと同期する'),
+                        : const Icon(Icons.cloud_upload),
+                    label: Text(
+                      _uploadingBackup ? 'バックアップ送信中...' : '今すぐ在庫バックアップを保存する',
+                    ),
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.all(16),
                     ),
                   ),
                   const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const SyncConflictScreen(),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.warning_amber_rounded),
-                    label: const Text('同期競合を解決する'),
+                  Text(
+                    'プロダクトキーごとの最新在庫バックアップをサーバーに保存します。',
+                    style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ],
               ),

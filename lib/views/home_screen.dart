@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/inventory_provider.dart';
-import '../providers/product_provider.dart';
-import '../services/sync_service.dart';
 import 'product_registration_screen.dart';
 import 'product_list_screen.dart';
 import 'inventory_registration_screen.dart';
@@ -18,44 +16,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
-  final _syncService = SyncService();
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    _triggerAutoSync();
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      _triggerAutoSync();
-    }
-  }
-
-  Future<void> _triggerAutoSync() async {
-    try {
-      await _syncService.manualFullSync();
-      if (!mounted) {
-        return;
-      }
-      await Future.wait([
-        context.read<ProductProvider>().fetchProducts(),
-        context.read<InventoryProvider>().fetchInventories(),
-      ]);
-    } catch (_) {
-      // 同期失敗はホーム表示をブロックしない
-    }
-  }
-
+class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(

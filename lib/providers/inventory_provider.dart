@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 import '../models/inventory.dart';
 import '../services/database_helper.dart';
 import '../services/notification_service.dart';
-import '../services/sync_service.dart';
 
 class InventoryProvider with ChangeNotifier {
   List<Inventory> _inventories = [];
@@ -10,7 +9,6 @@ class InventoryProvider with ChangeNotifier {
   bool _isLoading = false;
 
   final DatabaseHelper _dbHelper = DatabaseHelper();
-  final SyncService _syncService = SyncService();
 
   List<Inventory> get inventories => _inventories;
   List<Map<String, dynamic>> get inventoriesWithProduct =>
@@ -52,7 +50,7 @@ class InventoryProvider with ChangeNotifier {
     final now = DateTime.now();
     return _inventoriesWithProduct.where((item) {
       final expirationDate = DateTime.parse(item['expirationDate']);
-      final salesPeriod = item['salesPeriod'] as int;
+      final salesPeriod = (item['salesPeriod'] as num?)?.toInt() ?? 0;
       final notificationDate = expirationDate.subtract(
         Duration(days: salesPeriod),
       );
@@ -68,25 +66,7 @@ class InventoryProvider with ChangeNotifier {
 
     try {
       // ローカル DB に追加
-      final insertedId = await _dbHelper.insertInventory(
-        inventory,
-        syncStatus: 'pending',
-      );
-
-      // Sync queue に追加
-      await _syncService.queueInventoryChange(
-        id: insertedId,
-        janCode: inventory.janCode,
-        quantity: inventory.quantity,
-        expirationDate: inventory.expirationDate.toIso8601String().split(
-          'T',
-        )[0],
-        registrationDate: inventory.registrationDate.toIso8601String().split(
-          'T',
-        )[0],
-        isArchived: inventory.isArchived,
-        operation: 'create',
-      );
+      await _dbHelper.insertInventory(inventory, syncStatus: 'synced');
 
       await fetchInventories();
     } finally {
@@ -96,51 +76,13 @@ class InventoryProvider with ChangeNotifier {
   }
 
   Future<void> archiveInventory(int id) async {
-    await _dbHelper.archiveInventory(id, syncStatus: 'pending');
-
-    // Sync queue に追加
-    final inventory = _inventories.firstWhere((i) => i.id == id);
-    await _syncService.queueInventoryChange(
-      id: id,
-      janCode: inventory.janCode,
-      quantity: inventory.quantity,
-      expirationDate: inventory.expirationDate.toIso8601String().split('T')[0],
-      registrationDate: inventory.registrationDate.toIso8601String().split(
-        'T',
-      )[0],
-      isArchived: true,
-      operation: 'update',
-    );
+    await _dbHelper.archiveInventory(id, syncStatus: 'synced');
 
     await fetchInventories();
   }
 
   Future<void> deleteInventory(int id) async {
-    await _dbHelper.archiveInventory(id, syncStatus: 'pending');
-
-    // Sync queue に追加
-    final inventory = _inventories.firstWhere(
-      (i) => i.id == id,
-      orElse: () => Inventory(
-        id: id,
-        janCode: '',
-        expirationDate: DateTime.now(),
-        quantity: 0,
-        registrationDate: DateTime.now(),
-      ),
-    );
-
-    await _syncService.queueInventoryChange(
-      id: id,
-      janCode: inventory.janCode,
-      quantity: inventory.quantity,
-      expirationDate: inventory.expirationDate.toIso8601String().split('T')[0],
-      registrationDate: inventory.registrationDate.toIso8601String().split(
-        'T',
-      )[0],
-      isArchived: true,
-      operation: 'delete',
-    );
+    await _dbHelper.archiveInventory(id, syncStatus: 'synced');
 
     await fetchInventories();
   }

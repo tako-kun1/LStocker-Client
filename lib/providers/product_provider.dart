@@ -1,12 +1,10 @@
 import 'package:flutter/foundation.dart';
 import '../models/product.dart';
 import '../services/database_helper.dart';
-import '../services/sync_service.dart';
 
 class ProductProvider with ChangeNotifier {
   List<Product> _products = [];
   final DatabaseHelper _dbHelper = DatabaseHelper();
-  final SyncService _syncService = SyncService();
 
   List<Product> get products => _products;
 
@@ -16,37 +14,13 @@ class ProductProvider with ChangeNotifier {
   }
 
   Future<void> addProduct(Product product) async {
-    // ローカル DB に追加
-    await _dbHelper.insertProduct(product, syncStatus: 'pending');
-
-    // Sync queue に追加（サーバーがある場合）
-    await _syncService.queueProductChange(
-      janCode: product.janCode,
-      name: product.name,
-      description: product.description,
-      imagePath: product.imagePath,
-      deptNumber: product.deptNumber,
-      salesPeriod: product.salesPeriod,
-      operation: 'create',
-    );
+    await _dbHelper.insertProduct(product, syncStatus: 'synced');
 
     await fetchProducts();
   }
 
   Future<void> updateProduct(Product product) async {
-    // ローカル DB を更新
-    await _dbHelper.updateProduct(product, syncStatus: 'pending');
-
-    // Sync queue に追加（サーバーがある場合）
-    await _syncService.queueProductChange(
-      janCode: product.janCode,
-      name: product.name,
-      description: product.description,
-      imagePath: product.imagePath,
-      deptNumber: product.deptNumber,
-      salesPeriod: product.salesPeriod,
-      operation: 'update',
-    );
+    await _dbHelper.updateProduct(product, syncStatus: 'synced');
 
     await fetchProducts();
   }
@@ -56,16 +30,7 @@ class ProductProvider with ChangeNotifier {
   }
 
   Future<void> deleteProduct(Product product) async {
-    await _dbHelper.markProductDeleted(product.janCode, syncStatus: 'pending');
-    await _syncService.queueProductChange(
-      janCode: product.janCode,
-      name: product.name,
-      description: product.description,
-      imagePath: product.imagePath,
-      deptNumber: product.deptNumber,
-      salesPeriod: product.salesPeriod,
-      operation: 'delete',
-    );
+    await _dbHelper.markProductDeleted(product.janCode, syncStatus: 'synced');
 
     await fetchProducts();
   }

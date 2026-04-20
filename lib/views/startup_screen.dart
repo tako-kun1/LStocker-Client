@@ -9,9 +9,9 @@ import '../providers/inventory_provider.dart';
 import '../providers/product_provider.dart';
 import '../providers/settings_provider.dart';
 import '../services/app_config.dart';
+import '../services/app_update_service.dart';
 import '../services/offline_db_service.dart';
 import '../services/product_key_service.dart';
-import '../services/sync_service.dart';
 import '../services/version_check_service.dart';
 import 'home_screen.dart';
 import 'license_activation_screen.dart';
@@ -25,9 +25,11 @@ class StartupScreen extends StatefulWidget {
 
 class _StartupScreenState extends State<StartupScreen> {
   final OfflineDbService _offlineDbService = OfflineDbService();
-  final SyncService _syncService = SyncService();
   final VersionCheckService _versionCheckService = VersionCheckService();
+  final AppUpdateService _appUpdateService = AppUpdateService();
   final ProductKeyService _productKeyService = ProductKeyService();
+  String? _updateProgressMessage;
+  double? _updateProgressValue;
 
   @override
   void initState() {
@@ -49,8 +51,8 @@ class _StartupScreenState extends State<StartupScreen> {
         .shouldPromptForLegacyImport()
         .timeout(const Duration(seconds: 2), onTimeout: () => false);
     final activatedFuture = AppConfig.enableProductKeyAuth
-      ? _productKeyService.isActivated()
-      : Future<bool>.value(true);
+        ? _productKeyService.isActivated()
+        : Future<bool>.value(true);
     final cachedUpdateResultFuture = _versionCheckService.getCachedResult();
 
     if (!mounted) {
@@ -58,7 +60,9 @@ class _StartupScreenState extends State<StartupScreen> {
     }
 
     final shouldPrompt = await legacyPromptFuture;
-    debugPrint('[Startup] legacy check finished in ${sw.elapsedMilliseconds}ms; shouldPrompt=$shouldPrompt');
+    debugPrint(
+      '[Startup] legacy check finished in ${sw.elapsedMilliseconds}ms; shouldPrompt=$shouldPrompt',
+    );
 
     if (!mounted) {
       return;
@@ -86,7 +90,9 @@ class _StartupScreenState extends State<StartupScreen> {
     }
 
     final activated = await activatedFuture;
-    debugPrint('[Startup] activation state resolved in ${sw.elapsedMilliseconds}ms; activated=$activated');
+    debugPrint(
+      '[Startup] activation state resolved in ${sw.elapsedMilliseconds}ms; activated=$activated',
+    );
     if (!mounted) {
       return;
     }
@@ -113,7 +119,9 @@ class _StartupScreenState extends State<StartupScreen> {
     }
 
     final cachedUpdateResult = await cachedUpdateResultFuture;
-    debugPrint('[Startup] cached update check resolved in ${sw.elapsedMilliseconds}ms');
+    debugPrint(
+      '[Startup] cached update check resolved in ${sw.elapsedMilliseconds}ms',
+    );
     if (settingsProvider.autoCheckUpdateOnStartup) {
       _runUpdateCheckInBackground();
     }
@@ -122,11 +130,21 @@ class _StartupScreenState extends State<StartupScreen> {
       return;
     }
 
-    if (cachedUpdateResult != null &&
-        cachedUpdateResult.updateAvailable &&
-        cachedUpdateResult.isRequired) {
-      await _showRequiredUpdateDialog(cachedUpdateResult);
+    if (cachedUpdateResult != null && cachedUpdateResult.updateAvailable) {
+      final installResult = await _appUpdateService.installUpdate(
+        cachedUpdateResult,
+        onProgress: _handleUpdateProgress,
+      );
+      if (cachedUpdateResult.isRequired && installResult.started) {
         return;
+      }
+      if (cachedUpdateResult.isRequired && !installResult.started) {
+        await _showRequiredUpdateDialog(
+          cachedUpdateResult,
+          installResult.message,
+        );
+        return;
+      }
     }
 
     await _loadInitialDataSafely(productProvider, inventoryProvider);
@@ -134,15 +152,13 @@ class _StartupScreenState extends State<StartupScreen> {
       '[Startup] initial data loaded in ${sw.elapsedMilliseconds}ms; products=${productProvider.products.length} inventories=${inventoryProvider.inventories.length}',
     );
 
-    _runStartupSyncInBackground(productProvider, inventoryProvider);
-
     if (!mounted) {
       return;
     }
 
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const HomeScreen()),
-    );
+    Navigator.of(
+      context,
+    ).pushReplacement(MaterialPageRoute(builder: (_) => const HomeScreen()));
     debugPrint('[Startup] home displayed: ${sw.elapsedMilliseconds}ms');
   }
 
@@ -150,12 +166,29 @@ class _StartupScreenState extends State<StartupScreen> {
     unawaited(
       Future<void>(() async {
         try {
-          await _versionCheckService.checkForUpdate();
+          final result = await _versionCheckService.checkForUpdate();
+          if (!result.updateAvailable) {
+            return;
+          }
+          await _appUpdateService.installUpdate(
+            result,
+            onProgress: _handleUpdateProgress,
+          );
         } catch (_) {
           // 起動体験を優先するため、更新確認失敗は無視。
         }
       }),
     );
+  }
+
+  void _handleUpdateProgress(String message, double? progress) {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _updateProgressMessage = message;
+      _updateProgressValue = progress;
+    });
   }
 
   Future<void> _loadInitialDataSafely(
@@ -173,28 +206,8 @@ class _StartupScreenState extends State<StartupScreen> {
           .timeout(const Duration(seconds: 2), onTimeout: () {})
           .catchError((_) {}),
     ]);
-            debugPrint('[Startup] _loadInitialDataSafely finished in ${sw.elapsedMilliseconds}ms');
-  }
-
-  void _runStartupSyncInBackground(
-    ProductProvider productProvider,
-    InventoryProvider inventoryProvider,
-  ) {
-    unawaited(
-      Future<void>(() async {
-        final sw = Stopwatch()..start();
-        try {
-          await _syncService.manualFullSync().timeout(const Duration(seconds: 8));
-          await Future.wait([
-            productProvider.fetchProducts(),
-            inventoryProvider.fetchInventories(),
-          ]);
-          debugPrint('[Startup] background sync completed in ${sw.elapsedMilliseconds}ms');
-        } catch (_) {
-          // 起動体験を優先するため、同期失敗はここでは握りつぶす。
-          debugPrint('[Startup] background sync failed after ${sw.elapsedMilliseconds}ms');
-        }
-      }),
+    debugPrint(
+      '[Startup] _loadInitialDataSafely finished in ${sw.elapsedMilliseconds}ms',
     );
   }
 
@@ -226,7 +239,10 @@ class _StartupScreenState extends State<StartupScreen> {
     return result ?? false;
   }
 
-  Future<void> _showRequiredUpdateDialog(VersionCheckResult result) async {
+  Future<void> _showRequiredUpdateDialog(
+    VersionCheckResult result,
+    String failureMessage,
+  ) async {
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
@@ -236,7 +252,8 @@ class _StartupScreenState extends State<StartupScreen> {
           content: Text(
             '現在のバージョン: ${result.currentVersion}\n'
             '最新バージョン: ${result.latestVersion}\n\n'
-            'アプリを利用するには更新が必要です。',
+            '自動更新を開始できませんでした。\n'
+            '$failureMessage',
           ),
           actions: [
             TextButton(
@@ -247,9 +264,11 @@ class _StartupScreenState extends State<StartupScreen> {
             ),
             ElevatedButton(
               onPressed: () async {
-                final apkUrl = result.apkUrl ?? AppConfig.githubReleasesPageUrl;
-
-                final uri = Uri.tryParse(apkUrl);
+                final uri = Uri.tryParse(
+                  result.releasePageUrl ??
+                      result.apkUrl ??
+                      AppConfig.effectiveUpdateFallbackPageUrl,
+                );
                 if (uri == null) {
                   if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -271,9 +290,23 @@ class _StartupScreenState extends State<StartupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
+    return Scaffold(
       body: Center(
-        child: CircularProgressIndicator(),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(height: 20),
+              Text(_updateProgressMessage ?? '起動準備中...'),
+              if (_updateProgressValue != null) ...[
+                const SizedBox(height: 12),
+                LinearProgressIndicator(value: _updateProgressValue),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }

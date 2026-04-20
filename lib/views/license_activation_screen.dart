@@ -1,18 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 
+import '../providers/inventory_provider.dart';
+import '../services/inventory_backup_service.dart';
 import '../services/product_key_service.dart';
 
 class LicenseActivationScreen extends StatefulWidget {
   const LicenseActivationScreen({super.key});
 
   @override
-  State<LicenseActivationScreen> createState() => _LicenseActivationScreenState();
+  State<LicenseActivationScreen> createState() =>
+      _LicenseActivationScreenState();
 }
 
 class _LicenseActivationScreenState extends State<LicenseActivationScreen> {
   final _controller = TextEditingController();
   final _service = ProductKeyService();
+  final _inventoryBackupService = InventoryBackupService();
   bool _submitting = false;
 
   @override
@@ -24,18 +29,32 @@ class _LicenseActivationScreenState extends State<LicenseActivationScreen> {
   Future<void> _activate() async {
     if (_submitting) return;
 
+    final inventoryProvider = context.read<InventoryProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+
     setState(() => _submitting = true);
     try {
       final result = await _service.activateProductKey(_controller.text);
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result.message)),
-      );
-
       if (result.success) {
-        Navigator.of(context).pop(true);
+        final restoreResult = await _inventoryBackupService
+            .downloadLatestBackupForCurrentKey();
+        if (!mounted) return;
+
+        await inventoryProvider.fetchInventories();
+
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('${result.message}\n${restoreResult.message}'),
+          ),
+        );
+        navigator.pop(true);
+        return;
       }
+
+      messenger.showSnackBar(SnackBar(content: Text(result.message)));
     } finally {
       if (mounted) {
         setState(() => _submitting = false);
@@ -75,16 +94,14 @@ class _LicenseActivationScreenState extends State<LicenseActivationScreen> {
                 textCapitalization: TextCapitalization.characters,
                 autocorrect: false,
                 enableSuggestions: false,
-                inputFormatters: const [
-                  _ProductKeyTextFormatter(),
-                ],
+                inputFormatters: const [_ProductKeyTextFormatter()],
                 textInputAction: TextInputAction.done,
                 onSubmitted: (_) => _activate(),
               ),
               const SizedBox(height: 12),
               ElevatedButton(
                 onPressed: _submitting ? null : _activate,
-                child: Text(_submitting ? '認証中...' : '認証する'),
+                child: Text(_submitting ? '認証とバックアップ取得中...' : '認証する'),
               ),
             ],
           ),
@@ -102,7 +119,10 @@ class _ProductKeyTextFormatter extends TextInputFormatter {
     TextEditingValue oldValue,
     TextEditingValue newValue,
   ) {
-    final raw = newValue.text.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
+    final raw = newValue.text.toUpperCase().replaceAll(
+      RegExp(r'[^A-Z0-9]'),
+      '',
+    );
     final clipped = raw.length > 16 ? raw.substring(0, 16) : raw;
 
     final buffer = StringBuffer();

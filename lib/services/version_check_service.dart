@@ -15,6 +15,7 @@ class VersionCheckResult {
   final String? minSupportedVersion;
   final String? releaseNotes;
   final String? apkUrl;
+  final String? releasePageUrl;
   final DateTime? publishedAt;
   final DateTime checkedAt;
   final String? error;
@@ -28,6 +29,7 @@ class VersionCheckResult {
     this.minSupportedVersion,
     this.releaseNotes,
     this.apkUrl,
+    this.releasePageUrl,
     this.publishedAt,
     this.error,
   });
@@ -41,6 +43,7 @@ class VersionCheckResult {
       'minSupportedVersion': minSupportedVersion,
       'releaseNotes': releaseNotes,
       'apkUrl': apkUrl,
+      'releasePageUrl': releasePageUrl,
       'publishedAt': publishedAt?.toIso8601String(),
       'checkedAt': checkedAt.toIso8601String(),
       'error': error,
@@ -56,10 +59,12 @@ class VersionCheckResult {
       minSupportedVersion: map['minSupportedVersion'] as String?,
       releaseNotes: map['releaseNotes'] as String?,
       apkUrl: map['apkUrl'] as String?,
+      releasePageUrl: map['releasePageUrl'] as String?,
       publishedAt: map['publishedAt'] != null
           ? DateTime.tryParse(map['publishedAt'] as String)
           : null,
-      checkedAt: DateTime.tryParse(map['checkedAt'] as String? ?? '') ??
+      checkedAt:
+          DateTime.tryParse(map['checkedAt'] as String? ?? '') ??
           DateTime.now(),
       error: map['error'] as String?,
     );
@@ -75,7 +80,7 @@ class VersionCheckService {
     BaseOptions(
       connectTimeout: const Duration(seconds: 8),
       receiveTimeout: const Duration(seconds: 8),
-      headers: {'Accept': 'application/vnd.github+json'},
+      headers: {'Accept': 'application/json'},
     ),
   );
 
@@ -116,37 +121,20 @@ class VersionCheckService {
     }
 
     try {
-      final response = await _dio.get(AppConfig.githubLatestReleaseApi);
+      final response = await _dio.get(AppConfig.effectiveUpdateMetadataUrl);
       final data = response.data as Map<String, dynamic>;
 
-      final latestVersion = _resolveLatestVersion(data);
-      final releaseBody = (data['body'] as String?) ?? '';
-      final minSupported = _extractMinSupportedVersion(releaseBody);
-      final forceUpdate = _extractForceUpdate(releaseBody);
-      final apkUrl = _extractApkUrl(data['assets']);
-      final publishedAt = DateTime.tryParse((data['published_at'] as String?) ?? '');
-
-      final hasUpdate = _compareVersions(currentVersion, latestVersion) < 0;
-      final belowMinimum = minSupported != null &&
-          _compareVersions(currentVersion, minSupported) < 0;
-
-      // 必須更新は force_update:true または min_supported_version 未満のみ。
-      final isRequired = hasUpdate && (belowMinimum || forceUpdate);
-
-      final result = VersionCheckResult(
-        updateAvailable: hasUpdate,
-        isRequired: isRequired,
+      final result = _buildResultFromResponse(
+        data: data,
         currentVersion: currentVersion,
-        latestVersion: latestVersion,
-        minSupportedVersion: minSupported,
-        releaseNotes: releaseBody,
-        apkUrl: apkUrl,
-        publishedAt: publishedAt,
         checkedAt: checkStartedAt,
       );
 
       await prefs.setString(_cacheKey, jsonEncode(result.toMap()));
-      await prefs.setString(_lastCheckedKey, result.checkedAt.toIso8601String());
+      await prefs.setString(
+        _lastCheckedKey,
+        result.checkedAt.toIso8601String(),
+      );
 
       return result;
     } catch (e) {
@@ -193,7 +181,9 @@ class VersionCheckService {
   }
 
   String? _extractMinSupportedVersion(String body) {
-    final regex = RegExp(r'min_supported_version\s*:\s*([0-9]+\.[0-9]+\.[0-9]+)');
+    final regex = RegExp(
+      r'min_supported_version\s*:\s*([0-9]+\.[0-9]+\.[0-9]+)',
+    );
     final match = regex.firstMatch(body);
     if (match == null) {
       return null;
@@ -233,6 +223,149 @@ class VersionCheckService {
       }
     }
 
+    return null;
+  }
+
+  VersionCheckResult _buildResultFromResponse({
+    required Map<String, dynamic> data,
+    required String currentVersion,
+    required DateTime checkedAt,
+  }) {
+    if (_looksLikeGitHubRelease(data)) {
+      return _buildResultFromGitHubRelease(
+        data: data,
+        currentVersion: currentVersion,
+        checkedAt: checkedAt,
+      );
+    }
+
+    return _buildResultFromCustomManifest(
+      data: data,
+      currentVersion: currentVersion,
+      checkedAt: checkedAt,
+    );
+  }
+
+  bool _looksLikeGitHubRelease(Map<String, dynamic> data) {
+    return data.containsKey('tag_name') || data.containsKey('assets');
+  }
+
+  VersionCheckResult _buildResultFromGitHubRelease({
+    required Map<String, dynamic> data,
+    required String currentVersion,
+    required DateTime checkedAt,
+  }) {
+    final latestVersion = _resolveLatestVersion(data);
+    final releaseBody = (data['body'] as String?) ?? '';
+    final minSupported = _extractMinSupportedVersion(releaseBody);
+    final forceUpdate = _extractForceUpdate(releaseBody);
+    final apkUrl = _extractApkUrl(data['assets']);
+    final publishedAt = DateTime.tryParse(
+      (data['published_at'] as String?) ?? '',
+    );
+    final hasUpdate = _compareVersions(currentVersion, latestVersion) < 0;
+    final belowMinimum =
+        minSupported != null &&
+        _compareVersions(currentVersion, minSupported) < 0;
+
+    return VersionCheckResult(
+      updateAvailable: hasUpdate,
+      isRequired: hasUpdate && (belowMinimum || forceUpdate),
+      currentVersion: currentVersion,
+      latestVersion: latestVersion,
+      minSupportedVersion: minSupported,
+      releaseNotes: releaseBody,
+      apkUrl: apkUrl,
+      releasePageUrl:
+          _readString(data, ['html_url']) ??
+          AppConfig.effectiveUpdateFallbackPageUrl,
+      publishedAt: publishedAt,
+      checkedAt: checkedAt,
+    );
+  }
+
+  VersionCheckResult _buildResultFromCustomManifest({
+    required Map<String, dynamic> data,
+    required String currentVersion,
+    required DateTime checkedAt,
+  }) {
+    final latestVersion = _normalizeVersion(
+      _readString(data, ['latest_version', 'latestVersion', 'version']) ??
+          '0.0.0',
+    );
+    final releaseNotes =
+        _readString(data, ['release_notes', 'releaseNotes', 'notes']) ?? '';
+    final minSupportedRaw = _readString(data, [
+      'min_supported_version',
+      'minSupportedVersion',
+    ]);
+    final minSupported = minSupportedRaw == null
+        ? null
+        : _normalizeVersion(minSupportedRaw);
+    final forceUpdate =
+        _readBool(data, ['force_update', 'forceUpdate']) ?? false;
+    final apkUrl = _readString(data, [
+      'apk_url',
+      'apkUrl',
+      'download_url',
+      'downloadUrl',
+    ]);
+    final pageUrl =
+        _readString(data, [
+          'page_url',
+          'pageUrl',
+          'release_page_url',
+          'releasePageUrl',
+        ]) ??
+        AppConfig.effectiveUpdateFallbackPageUrl;
+    final publishedAt = DateTime.tryParse(
+      _readString(data, ['published_at', 'publishedAt']) ?? '',
+    );
+    final hasUpdate = _compareVersions(currentVersion, latestVersion) < 0;
+    final belowMinimum =
+        minSupported != null &&
+        _compareVersions(currentVersion, minSupported) < 0;
+
+    return VersionCheckResult(
+      updateAvailable: hasUpdate,
+      isRequired: hasUpdate && (belowMinimum || forceUpdate),
+      currentVersion: currentVersion,
+      latestVersion: latestVersion,
+      minSupportedVersion: minSupported,
+      releaseNotes: releaseNotes,
+      apkUrl: apkUrl,
+      releasePageUrl: pageUrl,
+      publishedAt: publishedAt,
+      checkedAt: checkedAt,
+    );
+  }
+
+  String? _readString(Map<String, dynamic> data, List<String> keys) {
+    for (final key in keys) {
+      final value = data[key];
+      if (value is String && value.trim().isNotEmpty) {
+        return value.trim();
+      }
+    }
+    return null;
+  }
+
+  bool? _readBool(Map<String, dynamic> data, List<String> keys) {
+    for (final key in keys) {
+      final value = data[key];
+      if (value is bool) {
+        return value;
+      }
+      if (value is String) {
+        final normalized = value.trim().toLowerCase();
+        if (normalized == 'true') {
+          return true;
+        }
+        if (normalized == 'false') {
+          return false;
+        }
+      }
+    }
     return null;
   }
 

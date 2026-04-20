@@ -29,6 +29,16 @@ class AppConfig {
     defaultValue: 'https://auth.nazono.cloud:8443',
   );
 
+  static const String updateMetadataUrl = String.fromEnvironment(
+    'UPDATE_METADATA_URL',
+    defaultValue: '',
+  );
+
+  static const String updateFallbackPageUrl = String.fromEnvironment(
+    'UPDATE_FALLBACK_PAGE_URL',
+    defaultValue: '',
+  );
+
   static String get defaultBaseUrl {
     switch (appEnv) {
       case 'prod':
@@ -45,6 +55,20 @@ class AppConfig {
   static const String githubRepoName = 'LStocker-Client';
   static const String githubLatestReleaseApi =
       'https://api.github.com/repos/$githubRepoOwner/$githubRepoName/releases/latest';
-    static const String githubReleasesPageUrl =
+  static const String githubReleasesPageUrl =
       'https://github.com/tako-kun1/LStocker-Client/releases';
+
+  static String get effectiveUpdateMetadataUrl {
+    if (updateMetadataUrl.trim().isNotEmpty) {
+      return updateMetadataUrl.trim();
+    }
+    return githubLatestReleaseApi;
+  }
+
+  static String get effectiveUpdateFallbackPageUrl {
+    if (updateFallbackPageUrl.trim().isNotEmpty) {
+      return updateFallbackPageUrl.trim();
+    }
+    return githubReleasesPageUrl;
+  }
 }
