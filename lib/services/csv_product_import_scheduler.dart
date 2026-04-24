@@ -14,6 +14,7 @@ class CsvProductImportScheduler with WidgetsBindingObserver {
       CsvProductImportScheduler._internal();
 
   final CsvProductImportService _importService = CsvProductImportService();
+  final ValueNotifier<bool> importingNotifier = ValueNotifier<bool>(false);
   Timer? _timer;
   bool _isImporting = false;
   bool _observerAttached = false;
@@ -54,6 +55,7 @@ class CsvProductImportScheduler with WidgetsBindingObserver {
     }
 
     _isImporting = true;
+    importingNotifier.value = true;
     try {
       final result = await _importService.importFromUrl(_csvUrl);
       if (result.success) {
@@ -78,6 +80,7 @@ class CsvProductImportScheduler with WidgetsBindingObserver {
       );
     } finally {
       _isImporting = false;
+      importingNotifier.value = false;
     }
   }
 

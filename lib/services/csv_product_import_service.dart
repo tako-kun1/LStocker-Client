@@ -74,6 +74,17 @@ class CsvProductImportService {
           receiveTimeout: _kReceiveTimeout,
         ),
       );
+      if (response.statusCode == 404) {
+        return const CsvProductImportResult(
+          success: true,
+          message: 'CSV が見つからないため、インポートをスキップしました (HTTP 404)。',
+          totalRows: 0,
+          insertedCount: 0,
+          skippedExistingCount: 0,
+          skippedDuplicateCount: 0,
+          invalidRowCount: 0,
+        );
+      }
       if (response.statusCode != 200) {
         return CsvProductImportResult(
           success: false,
@@ -239,6 +250,17 @@ class CsvProductImportService {
         invalidRowCount: invalidRowCount,
       );
     } on DioException catch (e) {
+      if (e.response?.statusCode == 404) {
+        return const CsvProductImportResult(
+          success: true,
+          message: 'CSV が見つからないため、インポートをスキップしました (HTTP 404)。',
+          totalRows: 0,
+          insertedCount: 0,
+          skippedExistingCount: 0,
+          skippedDuplicateCount: 0,
+          invalidRowCount: 0,
+        );
+      }
       final msg = e.type == DioExceptionType.connectionTimeout ||
               e.type == DioExceptionType.sendTimeout ||
               e.type == DioExceptionType.receiveTimeout

@@ -63,6 +63,7 @@ class LStockerApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final csvImportScheduler = CsvProductImportScheduler();
     const brandColor = Color(0xFF0B5FA5);
     final baseTheme = ThemeData(
       colorScheme: ColorScheme.fromSeed(
@@ -146,6 +147,42 @@ class LStockerApp extends StatelessWidget {
           baseTheme.primaryTextTheme,
         ),
       ),
+      builder: (context, child) {
+        return ValueListenableBuilder<bool>(
+          valueListenable: csvImportScheduler.importingNotifier,
+          builder: (context, isImporting, _) {
+            return Stack(
+              children: [
+                child ?? const SizedBox.shrink(),
+                if (isImporting) ...[
+                  const ModalBarrier(
+                    dismissible: false,
+                    color: Color(0x66000000),
+                  ),
+                  const Center(
+                    child: Card(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 16,
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            CircularProgressIndicator(),
+                            SizedBox(height: 12),
+                            Text('CSV取込を実行中です...'),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            );
+          },
+        );
+      },
       home: const StartupScreen(),
     );
   }
