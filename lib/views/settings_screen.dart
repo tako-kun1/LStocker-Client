@@ -20,6 +20,7 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  static const bool _inventoryBackupTemporarilyDisabled = true;
   late TextEditingController _backupUrlController;
   late Future<PackageInfo> _packageInfoFuture;
   bool _checkingUpdate = false;
@@ -451,12 +452,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         child: Text('在庫更新時'),
                       ),
                     ],
-                    onChanged: (value) {
+                    onChanged: _inventoryBackupTemporarilyDisabled
+                        ? null
+                        : (value) {
                       if (value != null) {
                         settings.setSyncTiming(value);
                       }
                     },
                   ),
+                  if (_inventoryBackupTemporarilyDisabled) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      '現在、在庫バックアップは一時的に無効化されています。',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   Text(
                     _lastBackupUploadedAt == null
@@ -471,7 +483,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   const SizedBox(height: 20),
                   ElevatedButton.icon(
-                    onPressed: _uploadingBackup
+                    onPressed: _inventoryBackupTemporarilyDisabled
+                        ? null
+                        : _uploadingBackup
                         ? null
                         : () async {
                             setState(() => _uploadingBackup = true);
@@ -497,7 +511,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           )
                         : const Icon(Icons.cloud_upload),
                     label: Text(
-                      _uploadingBackup ? 'バックアップ送信中...' : '今すぐ在庫バックアップを保存する',
+                      _inventoryBackupTemporarilyDisabled
+                          ? '在庫バックアップは一時停止中'
+                          : _uploadingBackup
+                          ? 'バックアップ送信中...'
+                          : '今すぐ在庫バックアップを保存する',
                     ),
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.all(16),

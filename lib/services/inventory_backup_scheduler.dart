@@ -7,6 +7,9 @@ import '../providers/settings_provider.dart';
 import 'inventory_backup_service.dart';
 
 class InventoryBackupScheduler with WidgetsBindingObserver {
+  static const bool _isTemporarilyDisabled = true;
+  static const String _disabledMessage =
+      '現在、在庫バックアップは一時的に無効化されています。';
   static const String _lastBackupUploadedAtKey =
       'inventoryBackupLastUploadedAt';
   static const Duration _hourlyInterval = Duration(hours: 1);
@@ -42,6 +45,10 @@ class InventoryBackupScheduler with WidgetsBindingObserver {
   }
 
   Future<void> handleAppReady() async {
+    if (_isTemporarilyDisabled) {
+      return;
+    }
+
     _applySchedule();
 
     final timing =
@@ -57,6 +64,10 @@ class InventoryBackupScheduler with WidgetsBindingObserver {
   }
 
   Future<void> handleInventoryChanged() async {
+    if (_isTemporarilyDisabled) {
+      return;
+    }
+
     final timing =
         _settingsProvider?.syncTiming ?? SettingsProvider.backupTimingManual;
     if (timing != SettingsProvider.backupTimingOnChange) {
@@ -68,6 +79,14 @@ class InventoryBackupScheduler with WidgetsBindingObserver {
   Future<InventoryBackupUploadResult> uploadNow({
     String reason = 'manual',
   }) async {
+    if (_isTemporarilyDisabled) {
+      return const InventoryBackupUploadResult(
+        success: false,
+        message: _disabledMessage,
+        uploadedCount: 0,
+      );
+    }
+
     if (_isUploading) {
       return const InventoryBackupUploadResult(
         success: false,
@@ -104,6 +123,10 @@ class InventoryBackupScheduler with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (_isTemporarilyDisabled) {
+      return;
+    }
+
     if (state != AppLifecycleState.resumed) {
       return;
     }
@@ -122,6 +145,10 @@ class InventoryBackupScheduler with WidgetsBindingObserver {
   void _applySchedule() {
     _hourlyTimer?.cancel();
     _hourlyTimer = null;
+
+    if (_isTemporarilyDisabled) {
+      return;
+    }
 
     final timing =
         _settingsProvider?.syncTiming ?? SettingsProvider.backupTimingManual;
