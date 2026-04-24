@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
+import '../providers/product_provider.dart';
 import '../providers/settings_provider.dart';
 import '../services/app_config.dart';
 import '../services/app_update_service.dart';
 import '../services/backup_server_service.dart';
+import '../services/csv_product_import_scheduler.dart';
 import '../services/inventory_backup_scheduler.dart';
 import '../services/product_key_service.dart';
 import '../services/version_check_service.dart';
@@ -24,14 +26,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _checkingLicense = false;
   bool _checkingBackupServer = false;
   bool _uploadingBackup = false;
+  bool _importingCsv = false;
   DateTime? _lastUpdateCheckedAt;
   DateTime? _lastBackupUploadedAt;
+  DateTime? _lastCsvImportedAt;
   String? _backupServerCheckMessage;
   bool? _backupServerCheckSucceeded;
+  String? _csvImportMessage;
+  bool? _csvImportSucceeded;
   String? _updateProgressMessage;
   double? _updateProgressValue;
   final _appUpdateService = AppUpdateService();
   final _backupServerService = BackupServerService();
+  final _csvImportScheduler = CsvProductImportScheduler();
   final _inventoryBackupScheduler = InventoryBackupScheduler();
   final _versionCheckService = VersionCheckService();
   final _productKeyService = ProductKeyService();
@@ -46,6 +53,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _packageInfoFuture = PackageInfo.fromPlatform();
     _loadLastCheckedAt();
     _loadLastBackupUploadedAt();
+    _loadLastCsvImportedAt();
   }
 
   Future<void> _loadLastCheckedAt() async {
@@ -62,6 +70,48 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() {
       _lastBackupUploadedAt = uploadedAt;
     });
+  }
+
+  Future<void> _loadLastCsvImportedAt() async {
+    final importedAt = await _csvImportScheduler.getLastImportedAt();
+    if (!mounted) return;
+    setState(() {
+      _lastCsvImportedAt = importedAt;
+    });
+  }
+
+  Future<void> _runCsvImport() async {
+    final productProvider = context.read<ProductProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+
+    setState(() {
+      _importingCsv = true;
+      _csvImportMessage = null;
+      _csvImportSucceeded = null;
+    });
+
+    final result = await _csvImportScheduler.importNow(
+      reason: 'manual',
+    );
+    if (!mounted) return;
+
+    setState(() {
+      _csvImportMessage = result.message;
+      _csvImportSucceeded = result.success;
+    });
+
+    if (result.success && result.insertedCount > 0) {
+      await productProvider.fetchProducts();
+      await _loadLastCsvImportedAt();
+    }
+
+    messenger.showSnackBar(SnackBar(content: Text(result.message)));
+
+    if (mounted) {
+      setState(() {
+        _importingCsv = false;
+      });
+    }
   }
 
   Future<void> _checkBackupServerConnection(SettingsProvider settings) async {
@@ -333,6 +383,47 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               _buildSection(
                 context,
+                title: 'CSV商品取込設定',
+                icon: Icons.file_download_outlined,
+                children: [
+                  Text('取込元: https://lsdb.nazono.cloud/db.csv'),
+                  const SizedBox(height: 4),
+                  Text('実行間隔: 1日ごと（起動時に1回実行）'),
+                  const SizedBox(height: 8),
+                  Text(
+                    _lastCsvImportedAt == null
+                        ? '最終CSV取込: 未実施'
+                        : '最終CSV取込: ${_lastCsvImportedAt!.toLocal().toString().substring(0, 19)}',
+                  ),
+                  const SizedBox(height: 12),
+                  ElevatedButton.icon(
+                    onPressed: _importingCsv
+                        ? null
+                        : () => _runCsvImport(),
+                    icon: _importingCsv
+                        ? const SizedBox(
+                            height: 18,
+                            width: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.play_arrow),
+                    label: Text(_importingCsv ? '取込中...' : '今すぐCSV商品取込を実行する'),
+                  ),
+                  if (_csvImportMessage != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      _csvImportMessage!,
+                      style: TextStyle(
+                        color: (_csvImportSucceeded ?? false)
+                            ? Colors.green.shade700
+                            : Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              _buildSection(
+                context,
                 title: '在庫バックアップ設定',
                 icon: Icons.cloud_upload_outlined,
                 children: [
@@ -451,25 +542,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }) {
     return Card(
       margin: const EdgeInsets.only(bottom: 20),
-      elevation: 1,
+      elevation: 0,
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                Icon(
-                  icon,
-                  size: 20,
-                  color: Theme.of(context).colorScheme.primary,
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.primary.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    icon,
+                    size: 18,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
                 ),
                 const SizedBox(width: 8),
                 Text(
                   title,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ],

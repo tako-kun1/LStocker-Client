@@ -9,6 +9,7 @@ import 'providers/settings_provider.dart';
 import 'services/dept_service.dart';
 import 'services/api_client.dart';
 import 'services/app_config.dart';
+import 'services/csv_product_import_scheduler.dart';
 import 'services/inventory_backup_scheduler.dart';
 import 'services/notification_service.dart';
 import 'services/sync_service.dart';
@@ -41,6 +42,7 @@ void main() async {
   }
 
   InventoryBackupScheduler().initialize(settingsProvider);
+  CsvProductImportScheduler().initialize();
 
   unawaited(DeptService.loadDepts());
 
@@ -61,22 +63,78 @@ class LStockerApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const brandColor = Color(0xFF0B5FA5);
     final baseTheme = ThemeData(
       colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xFF0E66AA),
+        seedColor: brandColor,
         brightness: Brightness.light,
       ),
       useMaterial3: true,
-      scaffoldBackgroundColor: Colors.white,
+      scaffoldBackgroundColor: const Color(0xFFF7FAFC),
+      visualDensity: VisualDensity.adaptivePlatformDensity,
       appBarTheme: const AppBarTheme(
-        backgroundColor: Colors.white,
-        foregroundColor: Color(0xFF0E66AA),
+        backgroundColor: Color(0xFFF7FAFC),
+        foregroundColor: Color(0xFF0B5FA5),
         surfaceTintColor: Colors.white,
+        centerTitle: true,
+        elevation: 0,
       ),
       cardTheme: CardThemeData(
-        elevation: 4,
+        elevation: 1,
         color: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.symmetric(vertical: 6),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: Colors.white,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 14,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.blueGrey.shade100),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.blueGrey.shade100),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: brandColor, width: 1.4),
+        ),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          elevation: 0,
+          backgroundColor: brandColor,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          textStyle: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          side: BorderSide(color: Colors.blueGrey.shade200),
+          foregroundColor: const Color(0xFF1C4E80),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      ),
+      floatingActionButtonTheme: const FloatingActionButtonThemeData(
+        backgroundColor: brandColor,
+        foregroundColor: Colors.white,
+      ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: Colors.blueGrey.shade900,
+        contentTextStyle: const TextStyle(color: Colors.white),
       ),
     );
 

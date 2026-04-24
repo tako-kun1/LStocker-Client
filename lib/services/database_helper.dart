@@ -315,6 +315,47 @@ class DatabaseHelper {
     });
   }
 
+  Future<Set<String>> getAllProductJanCodes() async {
+    final db = await database;
+    final maps = await db.query('products', columns: ['janCode']);
+    return maps
+        .map((row) => (row['janCode'] as String?) ?? '')
+        .where((janCode) => janCode.isNotEmpty)
+        .toSet();
+  }
+
+  Future<int> insertProductsInTransaction(
+    List<Product> products, {
+    String syncStatus = 'synced',
+  }) async {
+    if (products.isEmpty) {
+      return 0;
+    }
+
+    final db = await database;
+    var insertedCount = 0;
+
+    await db.transaction((txn) async {
+      for (final product in products) {
+        final map = product.toMap();
+        map['updatedAtLocal'] = DateTime.now().toIso8601String();
+        map['syncStatus'] = syncStatus;
+        map['isDeleted'] = 0;
+
+        final result = await txn.insert(
+          'products',
+          map,
+          conflictAlgorithm: ConflictAlgorithm.ignore,
+        );
+        if (result > 0) {
+          insertedCount++;
+        }
+      }
+    });
+
+    return insertedCount;
+  }
+
   Future<Product?> getProduct(String janCode) async {
     Database db = await database;
     List<Map<String, dynamic>> maps = await db.query(

@@ -26,6 +26,10 @@ class ProductProvider with ChangeNotifier {
   }
 
   Future<Product?> getProduct(String janCode) async {
+    // まずメモリ上のリストを検索（DBと一覧のズレを防ぐ）
+    final cached = _products.where((p) => p.janCode == janCode).firstOrNull;
+    if (cached != null) return cached;
+    // フォールバック: DBを直接クエリ
     return await _dbHelper.getProduct(janCode);
   }
 

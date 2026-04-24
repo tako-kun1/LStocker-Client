@@ -71,39 +71,53 @@ class _LicenseActivationScreenState extends State<LicenseActivationScreen> {
           automaticallyImplyLeading: false,
           title: const Text('プロダクトキー認証'),
         ),
-        body: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text('プロダクトキーを入力してください。'),
-              const SizedBox(height: 4),
-              const Text(
-                '形式: XXXX-XXXX-XXXX-XXXX（英大文字・数字）',
-                style: TextStyle(fontSize: 12, color: Colors.black54),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _controller,
-                decoration: const InputDecoration(
-                  labelText: 'プロダクトキー',
-                  hintText: 'XXXX-XXXX-XXXX-XXXX',
-                  border: OutlineInputBorder(),
+        body: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(18),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        'プロダクトキーを入力してください',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '形式: XXXX-XXXX-XXXX-XXXX（英大文字・数字）',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: 14),
+                      TextField(
+                        controller: _controller,
+                        decoration: const InputDecoration(
+                          labelText: 'プロダクトキー',
+                          hintText: 'XXXX-XXXX-XXXX-XXXX',
+                        ),
+                        keyboardType: TextInputType.visiblePassword,
+                        textCapitalization: TextCapitalization.characters,
+                        autocorrect: false,
+                        enableSuggestions: false,
+                        inputFormatters: const [_ProductKeyTextFormatter()],
+                        textInputAction: TextInputAction.done,
+                        onSubmitted: (_) => _activate(),
+                      ),
+                      const SizedBox(height: 14),
+                      ElevatedButton(
+                        onPressed: _submitting ? null : _activate,
+                        child: Text(_submitting ? '認証とバックアップ取得中...' : '認証する'),
+                      ),
+                    ],
+                  ),
                 ),
-                keyboardType: TextInputType.visiblePassword,
-                textCapitalization: TextCapitalization.characters,
-                autocorrect: false,
-                enableSuggestions: false,
-                inputFormatters: const [_ProductKeyTextFormatter()],
-                textInputAction: TextInputAction.done,
-                onSubmitted: (_) => _activate(),
               ),
-              const SizedBox(height: 12),
-              ElevatedButton(
-                onPressed: _submitting ? null : _activate,
-                child: Text(_submitting ? '認証とバックアップ取得中...' : '認証する'),
-              ),
-            ],
+            ),
           ),
         ),
       ),

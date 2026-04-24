@@ -27,11 +27,16 @@ class _NotificationScreenState extends State<NotificationScreen> {
           final notifications = provider.getNearExpirationInventories();
 
           if (notifications.isEmpty) {
-            return const Center(child: Text('現在通知はありません'));
+            return Center(
+              child: Text(
+                '現在通知はありません',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            );
           }
 
           return ListView.builder(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
             itemCount: notifications.length,
             itemBuilder: (context, index) {
               final item = notifications[index];
@@ -48,8 +53,12 @@ class _NotificationScreenState extends State<NotificationScreen> {
                 color: isOverdue
                     ? const Color.fromARGB(255, 199, 227, 249)
                     : Colors.blue[50],
-                margin: const EdgeInsets.symmetric(vertical: 8),
+                margin: const EdgeInsets.symmetric(vertical: 6),
                 child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                   leading: Icon(
                     Icons.warning_amber_rounded,
                     color: isOverdue
@@ -59,7 +68,9 @@ class _NotificationScreenState extends State<NotificationScreen> {
                   ),
                   title: Text(
                     '$itemName の期限が近づいています',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                   subtitle: Text(
                     '賞味期限: ${df.format(expirationDate)}\n販売制限開始: ${df.format(notificationDate)}',

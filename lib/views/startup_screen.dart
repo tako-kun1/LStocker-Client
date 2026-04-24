@@ -10,6 +10,7 @@ import '../providers/product_provider.dart';
 import '../providers/settings_provider.dart';
 import '../services/app_config.dart';
 import '../services/app_update_service.dart';
+import '../services/csv_product_import_scheduler.dart';
 import '../services/inventory_backup_scheduler.dart';
 import '../services/offline_db_service.dart';
 import '../services/product_key_service.dart';
@@ -154,6 +155,7 @@ class _StartupScreenState extends State<StartupScreen> {
     );
 
     unawaited(InventoryBackupScheduler().handleAppReady());
+    unawaited(CsvProductImportScheduler().handleAppReady());
 
     if (!mounted) {
       return;

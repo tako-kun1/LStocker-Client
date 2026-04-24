@@ -27,11 +27,16 @@ class _InventoryStatusScreenState extends State<InventoryStatusScreen> {
           final inventoryData = provider.inventoriesWithProduct;
 
           if (inventoryData.isEmpty) {
-            return const Center(child: Text('在庫がありません'));
+            return Center(
+              child: Text(
+                '在庫がありません',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            );
           }
 
           return ListView.builder(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
             itemCount: inventoryData.length,
             itemBuilder: (context, index) {
               final item = inventoryData[index];
@@ -43,12 +48,12 @@ class _InventoryStatusScreenState extends State<InventoryStatusScreen> {
                   .toString();
 
               return Card(
-                margin: const EdgeInsets.symmetric(vertical: 8),
+                margin: const EdgeInsets.symmetric(vertical: 6),
                 color: expirationDate.isBefore(DateTime.now())
                     ? Colors.red.shade100
                     : null,
                 child: Padding(
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.all(12),
                   child: Column(
                     children: [
                       Row(
@@ -73,10 +78,8 @@ class _InventoryStatusScreenState extends State<InventoryStatusScreen> {
                               children: [
                                 Text(
                                   itemName,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 14,
-                                  ),
+                                  style: Theme.of(context).textTheme.titleSmall
+                                      ?.copyWith(fontWeight: FontWeight.w700),
                                 ),
                                 const SizedBox(height: 2),
                                 Text('登録日: ${df.format(registrationDate)}'),

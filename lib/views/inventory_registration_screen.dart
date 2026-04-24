@@ -13,10 +13,12 @@ class InventoryRegistrationScreen extends StatefulWidget {
   const InventoryRegistrationScreen({super.key});
 
   @override
-  State<InventoryRegistrationScreen> createState() => _InventoryRegistrationScreenState();
+  State<InventoryRegistrationScreen> createState() =>
+      _InventoryRegistrationScreenState();
 }
 
-class _InventoryRegistrationScreenState extends State<InventoryRegistrationScreen> {
+class _InventoryRegistrationScreenState
+    extends State<InventoryRegistrationScreen> {
   static const int _maxJanLength = 24;
   final _janController = TextEditingController();
   final _janFocusNode = FocusNode();
@@ -32,6 +34,12 @@ class _InventoryRegistrationScreenState extends State<InventoryRegistrationScree
     return digits.length > _maxJanLength
         ? digits.substring(0, _maxJanLength)
         : digits;
+  }
+
+  String _normalizeJanFromCamera(String value) {
+    final normalized = _normalizeJan(value);
+    if (normalized.length <= 1) return normalized;
+    return normalized.substring(0, normalized.length - 1);
   }
 
   @override
@@ -61,7 +69,9 @@ class _InventoryRegistrationScreenState extends State<InventoryRegistrationScree
 
     if (_janController.text != normalizedJan) {
       _janController.text = normalizedJan;
-      _janController.selection = TextSelection.collapsed(offset: normalizedJan.length);
+      _janController.selection = TextSelection.collapsed(
+        offset: normalizedJan.length,
+      );
     }
 
     setState(() => _isLoading = true);
@@ -81,9 +91,11 @@ class _InventoryRegistrationScreenState extends State<InventoryRegistrationScree
       MaterialPageRoute(builder: (_) => const BarcodeScannerScreen()),
     );
     if (result != null) {
-      final normalized = _normalizeJan(result);
+      final normalized = _normalizeJanFromCamera(result);
       _janController.text = normalized;
-      _janController.selection = TextSelection.collapsed(offset: normalized.length);
+      _janController.selection = TextSelection.collapsed(
+        offset: normalized.length,
+      );
       final found = await _searchProduct(normalized);
       if (found && mounted) {
         _dateFocusNode.requestFocus();
@@ -93,12 +105,16 @@ class _InventoryRegistrationScreenState extends State<InventoryRegistrationScree
 
   Future<void> _saveInventory() async {
     if (_foundProduct == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('商品を特定してください')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('商品を特定してください')));
       return;
     }
     final dateText = _dateController.text;
     if (!RegExp(r'^\d{4}/\d{2}/\d{2}$').hasMatch(dateText)) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('日付形式が不正です (YYYY/MM/DD)')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('日付形式が不正です (YYYY/MM/DD)')));
       return;
     }
 
@@ -107,28 +123,40 @@ class _InventoryRegistrationScreenState extends State<InventoryRegistrationScree
     final month = int.tryParse(dateParts[1]);
     final day = int.tryParse(dateParts[2]);
     if (year == null || month == null || day == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('日付形式が不正です (YYYY/MM/DD)')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('日付形式が不正です (YYYY/MM/DD)')));
       return;
     }
     if (month < 1 || month > 12) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('月は 01 から 12 の範囲で入力してください')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('月は 01 から 12 の範囲で入力してください')));
       return;
     }
     if (day < 1 || day > 31) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('日は 01 から 31 の範囲で入力してください')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('日は 01 から 31 の範囲で入力してください')));
       return;
     }
 
     final quantity = int.tryParse(_quantityController.text);
     if (quantity == null || quantity <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('数量を正しく入力してください')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('数量を正しく入力してください')));
       return;
     }
 
     try {
       final expirationDate = DateTime(year, month, day);
-      if (expirationDate.year != year || expirationDate.month != month || expirationDate.day != day) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('存在しない日付です')));
+      if (expirationDate.year != year ||
+          expirationDate.month != month ||
+          expirationDate.day != day) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('存在しない日付です')));
         return;
       }
 
@@ -139,10 +167,15 @@ class _InventoryRegistrationScreenState extends State<InventoryRegistrationScree
         registrationDate: DateTime.now(),
       );
 
-      await Provider.of<InventoryProvider>(context, listen: false).addInventory(inventory);
-      
+      await Provider.of<InventoryProvider>(
+        context,
+        listen: false,
+      ).addInventory(inventory);
+
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('在庫を登録しました')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('在庫を登録しました')));
         setState(() {
           _janController.clear();
           _dateController.clear();
@@ -152,7 +185,9 @@ class _InventoryRegistrationScreenState extends State<InventoryRegistrationScree
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('保存に失敗しました')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('保存に失敗しました')));
     }
   }
 
@@ -160,110 +195,132 @@ class _InventoryRegistrationScreenState extends State<InventoryRegistrationScree
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('在庫登録')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: TextFormField(
-                    controller: _janController,
-                    focusNode: _janFocusNode,
-                    decoration: const InputDecoration(labelText: 'JANコード'),
-                    keyboardType: TextInputType.none,
-                    textInputAction: TextInputAction.next,
-                    inputFormatters: [
-                      FilteringTextInputFormatter.digitsOnly,
-                      LengthLimitingTextInputFormatter(_maxJanLength),
-                    ],
-                    onTap: () => SystemChannels.textInput.invokeMethod('TextInput.hide'),
-                    onFieldSubmitted: (value) async {
-                      final found = await _searchProduct(value);
-                      if (found && mounted) {
-                        _dateFocusNode.requestFocus();
-                      }
-                    },
+      body: Shortcuts(
+        shortcuts: const <ShortcutActivator, Intent>{
+          SingleActivator(LogicalKeyboardKey.tab):
+              DoNothingAndStopPropagationIntent(),
+          SingleActivator(LogicalKeyboardKey.enter):
+              DoNothingAndStopPropagationIntent(),
+          SingleActivator(LogicalKeyboardKey.numpadEnter):
+              DoNothingAndStopPropagationIntent(),
+        },
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _janController,
+                      focusNode: _janFocusNode,
+                      autofocus: true,
+                      decoration: const InputDecoration(labelText: 'JANコード'),
+                      keyboardType: TextInputType.number,
+                      textInputAction: TextInputAction.none,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(_maxJanLength),
+                      ],
+                    ),
                   ),
-                ),
-                IconButton(onPressed: _scanBarcode, icon: const Icon(Icons.qr_code_scanner)),
-                IconButton(onPressed: () => _searchProduct(_janController.text), icon: const Icon(Icons.search)),
-              ],
-            ),
-            const SizedBox(height: 16),
-            if (_isLoading) const Center(child: CircularProgressIndicator()),
-            if (_foundProduct != null) ...[
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Row(
-                    children: [
-                      if (_foundProduct!.imagePath.isNotEmpty)
-                        Image.file(File(_foundProduct!.imagePath), width: 80, height: 80, fit: BoxFit.cover)
-                      else
-                        const Icon(Icons.image_not_supported, size: 80),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(_foundProduct!.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                            Text('JAN: ${_foundProduct!.janCode}'),
-                          ],
-                        ),
-                      ),
-                    ],
+                  IconButton(
+                    onPressed: _scanBarcode,
+                    icon: const Icon(Icons.qr_code_scanner),
                   ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text('賞味期限を入力してください。'),
-              const SizedBox(height: 8),
-              TextFormField(
-                controller: _dateController,
-                focusNode: _dateFocusNode,
-                decoration: const InputDecoration(
-                  labelText: '賞味期限 (YYYYMMDD入力)',
-                  hintText: '例: 20260712 (自動で 2026/07/12 に変換)',
-                ),
-                keyboardType: TextInputType.number,
-                textInputAction: TextInputAction.next,
-                inputFormatters: [
-                  _DateInputFormatter(),
+                  IconButton(
+                    onPressed: () => _searchProduct(_janController.text),
+                    icon: const Icon(Icons.search),
+                  ),
                 ],
-                onFieldSubmitted: (_) => _quantityFocusNode.requestFocus(),
               ),
               const SizedBox(height: 16),
-              TextFormField(
-                controller: _quantityController,
-                focusNode: _quantityFocusNode,
-                decoration: const InputDecoration(labelText: '数量'),
-                keyboardType: TextInputType.number,
-                textInputAction: TextInputAction.done,
-                onFieldSubmitted: (_) => _saveInventory(),
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: _saveInventory,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Theme.of(context).colorScheme.primary,
-                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
+              if (_isLoading) const Center(child: CircularProgressIndicator()),
+              if (_foundProduct != null) ...[
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Row(
+                      children: [
+                        if (_foundProduct!.imagePath.isNotEmpty)
+                          Image.file(
+                            File(_foundProduct!.imagePath),
+                            width: 80,
+                            height: 80,
+                            fit: BoxFit.cover,
+                          )
+                        else
+                          const Icon(Icons.image_not_supported, size: 80),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _foundProduct!.name,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                              Text('JAN: ${_foundProduct!.janCode}'),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-                child: const Padding(
-                  padding: EdgeInsets.all(12.0),
-                  child: Text('在庫登録を確定する', style: TextStyle(fontSize: 18)),
+                const SizedBox(height: 16),
+                const Text('賞味期限を入力してください。'),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _dateController,
+                  focusNode: _dateFocusNode,
+                  decoration: const InputDecoration(
+                    labelText: '賞味期限 (YYYYMMDD入力)',
+                    hintText: '例: 20260712 (自動で 2026/07/12 に変換)',
+                  ),
+                  keyboardType: TextInputType.number,
+                  textInputAction: TextInputAction.none,
+                  inputFormatters: [_DateInputFormatter()],
                 ),
-              ),
-            ] else if (_janController.text.isNotEmpty && !_isLoading) ...[
-              const Center(child: Text('商品が見つかりません。先に商品を登録してください。')),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ProductRegistrationScreen())),
-                child: const Text('商品登録画面へ'),
-              ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _quantityController,
+                  focusNode: _quantityFocusNode,
+                  decoration: const InputDecoration(labelText: '数量'),
+                  keyboardType: TextInputType.number,
+                  textInputAction: TextInputAction.none,
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: _saveInventory,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                  ),
+                  child: const Padding(
+                    padding: EdgeInsets.all(12.0),
+                    child: Text('在庫登録を確定する', style: TextStyle(fontSize: 18)),
+                  ),
+                ),
+              ] else if (_janController.text.isNotEmpty && !_isLoading) ...[
+                const Center(child: Text('商品が見つかりません。先に商品を登録してください。')),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const ProductRegistrationScreen(),
+                    ),
+                  ),
+                  child: const Text('商品登録画面へ'),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -272,7 +329,10 @@ class _InventoryRegistrationScreenState extends State<InventoryRegistrationScree
 
 class _DateInputFormatter extends TextInputFormatter {
   @override
-  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
     String text = newValue.text
         .replaceAllMapped(RegExp(r'[０-９]'), (match) {
           final code = match.group(0)!.codeUnitAt(0) - 0xFF10;
@@ -285,14 +345,14 @@ class _DateInputFormatter extends TextInputFormatter {
     }
 
     String formatted = '';
-    
+
     for (int i = 0; i < text.length; i++) {
       formatted += text[i];
       if ((i == 3 || i == 5) && i != text.length - 1) {
         formatted += '/';
       }
     }
-    
+
     return TextEditingValue(
       text: formatted,
       selection: TextSelection.collapsed(offset: formatted.length),

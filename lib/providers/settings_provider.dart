@@ -12,7 +12,6 @@ class SettingsProvider with ChangeNotifier {
   static const String backupTimingOnChange = 'On Change';
   static const String _legacyServerUrlKey = 'serverUrl';
   static const String _backupServerUrlKey = 'backupServerUrl';
-
   String _backupServerUrl = '';
   bool _pushNotificationsEnabled = true;
   String _syncTiming = backupTimingManual;
