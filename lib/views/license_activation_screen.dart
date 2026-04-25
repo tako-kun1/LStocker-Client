@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../providers/inventory_provider.dart';
 import '../services/inventory_backup_service.dart';
 import '../services/product_key_service.dart';
+import '../services/support_contact.dart';
 
 class LicenseActivationScreen extends StatefulWidget {
   const LicenseActivationScreen({super.key});
@@ -62,8 +64,40 @@ class _LicenseActivationScreenState extends State<LicenseActivationScreen> {
     }
   }
 
+  Future<void> _openSupportContact() async {
+    if (!SupportContact.hasUrl) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('お問い合わせ先URLが未設定です。')),
+      );
+      return;
+    }
+
+    final uri = Uri.tryParse(SupportContact.effectiveUrl);
+    if (uri == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('お問い合わせ先URLの形式が不正です。')),
+      );
+      return;
+    }
+
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (opened || !mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('お問い合わせ先を開けませんでした。')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final supportName = SupportContact.effectiveName;
+    final supportEmail = SupportContact.effectiveEmail;
+    final supportPhone = SupportContact.effectivePhone;
+
     return PopScope(
       canPop: false,
       child: Scaffold(
@@ -113,6 +147,32 @@ class _LicenseActivationScreenState extends State<LicenseActivationScreen> {
                         onPressed: _submitting ? null : _activate,
                         child: Text(_submitting ? '認証とバックアップ取得中...' : '認証する'),
                       ),
+                      if (SupportContact.hasAny) ...[
+                        const SizedBox(height: 10),
+                        if (SupportContact.hasName)
+                          Text(
+                            'お問い合わせ先: $supportName',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        if (SupportContact.hasEmail)
+                          Text(
+                            'メール: $supportEmail',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        if (SupportContact.hasPhone)
+                          Text(
+                            '電話: $supportPhone',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        if (SupportContact.hasUrl) ...[
+                          const SizedBox(height: 8),
+                          TextButton.icon(
+                            onPressed: _openSupportContact,
+                            icon: const Icon(Icons.support_agent),
+                            label: const Text('お問い合わせ先を開く'),
+                          ),
+                        ],
+                      ],
                     ],
                   ),
                 ),

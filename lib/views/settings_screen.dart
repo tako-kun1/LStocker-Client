@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../providers/product_provider.dart';
 import '../providers/settings_provider.dart';
 import '../services/app_config.dart';
@@ -9,6 +10,7 @@ import '../services/backup_server_service.dart';
 import '../services/csv_product_import_scheduler.dart';
 import '../services/inventory_backup_scheduler.dart';
 import '../services/product_key_service.dart';
+import '../services/support_contact.dart';
 import '../services/version_check_service.dart';
 import 'license_activation_screen.dart';
 
@@ -154,6 +156,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
   }
 
+  Future<void> _openSupportContact() async {
+    if (!SupportContact.hasUrl) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('お問い合わせ先URLが未設定です。')),
+      );
+      return;
+    }
+
+    final uri = Uri.tryParse(SupportContact.effectiveUrl);
+    if (uri == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('お問い合わせ先URLの形式が不正です。')),
+      );
+      return;
+    }
+
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (opened || !mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('お問い合わせ先を開けませんでした。')),
+    );
+  }
+
   @override
   void dispose() {
     _backupUrlController.dispose();
@@ -162,6 +192,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final supportName = SupportContact.effectiveName;
+    final supportEmail = SupportContact.effectiveEmail;
+    final supportPhone = SupportContact.effectivePhone;
+    final supportUrl = SupportContact.effectiveUrl;
+
     return Scaffold(
       appBar: AppBar(title: const Text('設定')),
       body: Consumer<SettingsProvider>(
@@ -565,6 +600,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ],
               ),
+              if (SupportContact.hasAny)
+                _buildSection(
+                  context,
+                  title: 'お問い合わせ',
+                  icon: Icons.support_agent,
+                  children: [
+                    if (SupportContact.hasName)
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.badge_outlined),
+                        title: const Text('お問い合わせ先名'),
+                        subtitle: Text(supportName),
+                      ),
+                    if (SupportContact.hasEmail)
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.mail_outline),
+                        title: const Text('メールアドレス'),
+                        subtitle: Text(supportEmail),
+                      ),
+                    if (SupportContact.hasPhone)
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.phone_outlined),
+                        title: const Text('電話番号'),
+                        subtitle: Text(supportPhone),
+                      ),
+                    if (SupportContact.hasUrl)
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.open_in_new),
+                        title: const Text('お問い合わせ先を開く'),
+                        subtitle: Text(supportUrl),
+                        onTap: _openSupportContact,
+                      ),
+                  ],
+                ),
               const SizedBox(height: 32),
               FutureBuilder<PackageInfo>(
                 future: _packageInfoFuture,
