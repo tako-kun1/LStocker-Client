@@ -1,4 +1,4 @@
-package com.example.lstocker
+package cloud.nazono.lstocker
 
 import android.app.AlarmManager
 import android.app.PendingIntent

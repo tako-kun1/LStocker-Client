@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:camera/camera.dart';
 import '../models/product.dart';
 import '../providers/product_provider.dart';
+import '../providers/settings_provider.dart';
 import '../services/dept_service.dart';
 import 'components/barcode_scanner.dart';
 import 'components/camera_screen.dart';
@@ -77,13 +78,18 @@ class _ProductRegistrationScreenState extends State<ProductRegistrationScreen> {
   }
 
   Future<void> _scanBarcode() async {
+    final settings = context.read<SettingsProvider>();
     final navigator = Navigator.of(context);
     final result = await navigator.push<String>(
       MaterialPageRoute(builder: (_) => const BarcodeScannerScreen()),
     );
     if (!mounted) return;
     if (result != null) {
-      final normalized = _normalizeJanFromCamera(result);
+      final normalized =
+          settings.barcodeScanMethod ==
+              SettingsProvider.barcodeScanMethodDeviceReader
+          ? _normalizeJan(result)
+          : _normalizeJanFromCamera(result);
       setState(() {
         _janController.text = normalized;
         _janController.selection = TextSelection.collapsed(

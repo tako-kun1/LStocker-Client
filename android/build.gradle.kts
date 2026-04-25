@@ -2,6 +2,7 @@ allprojects {
     repositories {
         google()
         mavenCentral()
+        maven(url = "https://zebratech.jfrog.io/artifactory/EMDK-Android/")
     }
 }
 
