@@ -9,6 +9,7 @@ import '../services/app_config.dart';
 import '../services/app_update_service.dart';
 import '../services/backup_server_service.dart';
 import '../services/csv_product_import_scheduler.dart';
+import '../services/database_helper.dart';
 import '../services/inventory_backup_scheduler.dart';
 import '../services/product_key_service.dart';
 import '../services/support_contact.dart';
@@ -34,6 +35,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _checkingBackupServer = false;
   bool _uploadingBackup = false;
   bool _importingCsv = false;
+  bool _refreshingCsvFromScratch = false;
   DateTime? _lastUpdateCheckedAt;
   DateTime? _lastBackupUploadedAt;
   DateTime? _lastCsvImportedAt;
@@ -47,6 +49,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _appUpdateService = AppUpdateService();
   final _backupServerService = BackupServerService();
   final _csvImportScheduler = CsvProductImportScheduler();
+  final _databaseHelper = DatabaseHelper();
   final _inventoryBackupScheduler = InventoryBackupScheduler();
   final _versionCheckService = VersionCheckService();
   final _productKeyService = ProductKeyService();
@@ -119,6 +122,82 @@ class _SettingsScreenState extends State<SettingsScreen> {
       setState(() {
         _importingCsv = false;
       });
+    }
+  }
+
+  Future<void> _resetDbAndImportLatestCsv() async {
+    final shouldRun = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('確認'),
+          content: const Text(
+            'DB内のデータ（商品・在庫・同期キュー）を削除して、最新CSVを再取得します。\nこの操作は取り消せません。実行しますか？',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('キャンセル'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('実行する'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldRun != true || !mounted) {
+      return;
+    }
+
+    final productProvider = context.read<ProductProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+
+    setState(() {
+      _refreshingCsvFromScratch = true;
+      _csvImportMessage = null;
+      _csvImportSucceeded = null;
+    });
+
+    try {
+      await _databaseHelper.clearAllAppDataForCsvRefresh();
+
+      final result = await _csvImportScheduler.importNow(
+        reason: 'manual-reset-and-import',
+      );
+
+      if (!mounted) return;
+
+      await productProvider.fetchProducts();
+      if (result.success) {
+        await _loadLastCsvImportedAt();
+      }
+
+      setState(() {
+        _csvImportSucceeded = result.success;
+        _csvImportMessage = result.success
+            ? 'DBを初期化して最新CSVを取り込みました。${result.message}'
+            : 'DB初期化後のCSV取込に失敗しました。${result.message}';
+      });
+
+      messenger.showSnackBar(
+        SnackBar(content: Text(_csvImportMessage!)),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _csvImportSucceeded = false;
+        _csvImportMessage = 'DB初期化とCSV取込でエラーが発生しました: $e';
+      });
+      messenger.showSnackBar(SnackBar(content: Text(_csvImportMessage!)));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _refreshingCsvFromScratch = false;
+        });
+      }
     }
   }
 
@@ -545,7 +624,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   const SizedBox(height: 12),
                   ElevatedButton.icon(
-                    onPressed: _importingCsv
+                    onPressed: (_importingCsv || _refreshingCsvFromScratch)
                         ? null
                         : () => _runCsvImport(),
                     icon: _importingCsv
@@ -556,6 +635,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           )
                         : const Icon(Icons.play_arrow),
                     label: Text(_importingCsv ? '取込中...' : '今すぐCSV商品取込を実行する'),
+                  ),
+                  const SizedBox(height: 10),
+                  ElevatedButton.icon(
+                    onPressed: (_importingCsv || _refreshingCsvFromScratch)
+                        ? null
+                        : _resetDbAndImportLatestCsv,
+                    icon: _refreshingCsvFromScratch
+                        ? const SizedBox(
+                            height: 18,
+                            width: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.restart_alt),
+                    label: Text(
+                      _refreshingCsvFromScratch
+                          ? 'DB初期化＋CSV再取得中...'
+                          : 'DBデータ削除して最新CSVを取得する',
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Theme.of(context).colorScheme.error,
+                      foregroundColor: Theme.of(context).colorScheme.onError,
+                    ),
                   ),
                   if (_csvImportMessage != null) ...[
                     const SizedBox(height: 8),

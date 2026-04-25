@@ -542,6 +542,15 @@ class DatabaseHelper {
     });
   }
 
+  Future<void> clearAllAppDataForCsvRefresh() async {
+    final db = await database;
+    await db.transaction((txn) async {
+      await txn.delete('inventories');
+      await txn.delete('products');
+      await txn.delete('sync_queue');
+    });
+  }
+
   Future<List<Map<String, dynamic>>> getInventoriesWithProduct({
     bool includeArchived = false,
   }) async {
