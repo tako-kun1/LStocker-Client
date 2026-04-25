@@ -23,6 +23,9 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   static const bool _inventoryBackupTemporarilyDisabled = true;
+  static const Duration _updateProgressUiThrottle = Duration(
+    milliseconds: 120,
+  );
   late TextEditingController _backupUrlController;
   late Future<PackageInfo> _packageInfoFuture;
   bool _checkingUpdate = false;
@@ -39,6 +42,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool? _csvImportSucceeded;
   String? _updateProgressMessage;
   double? _updateProgressValue;
+  DateTime? _lastUpdateProgressUiAt;
   final _appUpdateService = AppUpdateService();
   final _backupServerService = BackupServerService();
   final _csvImportScheduler = CsvProductImportScheduler();
@@ -150,9 +154,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (!mounted) {
       return;
     }
+
+    final now = DateTime.now();
+    final normalizedProgress = progress == null
+        ? _updateProgressValue
+        : progress.clamp(0.0, 1.0);
+    final nextProgress = normalizedProgress == null
+        ? null
+        : _updateProgressValue == null
+        ? normalizedProgress
+        : normalizedProgress >= _updateProgressValue!
+        ? normalizedProgress
+        : _updateProgressValue;
+
+    final progressChanged = nextProgress != _updateProgressValue;
+    final messageChanged = message != _updateProgressMessage;
+    final shouldThrottle =
+        _lastUpdateProgressUiAt != null &&
+        now.difference(_lastUpdateProgressUiAt!) < _updateProgressUiThrottle;
+
+    if (shouldThrottle && !messageChanged && !progressChanged) {
+      return;
+    }
+
+    _lastUpdateProgressUiAt = now;
     setState(() {
       _updateProgressMessage = message;
-      _updateProgressValue = progress;
+      _updateProgressValue = nextProgress;
     });
   }
 

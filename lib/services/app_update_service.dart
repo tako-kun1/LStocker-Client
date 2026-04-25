@@ -25,6 +25,8 @@ class AppUpdateInstallResult {
 }
 
 class AppUpdateService {
+  static Future<AppUpdateInstallResult>? _ongoingInstall;
+
   final Dio _dio = Dio(
     BaseOptions(
       connectTimeout: const Duration(seconds: 30),
@@ -34,6 +36,31 @@ class AppUpdateService {
   );
 
   Future<AppUpdateInstallResult> installUpdate(
+    VersionCheckResult result, {
+    bool allowFallbackToReleasePage = true,
+    AppUpdateProgressCallback? onProgress,
+  }) async {
+    if (_ongoingInstall != null) {
+      _emitProgress(onProgress, '既にアップデート処理を実行中です。', null);
+      return _ongoingInstall!;
+    }
+
+    final installFuture = _installUpdateInternal(
+      result,
+      allowFallbackToReleasePage: allowFallbackToReleasePage,
+      onProgress: onProgress,
+    );
+    _ongoingInstall = installFuture;
+    try {
+      return await installFuture;
+    } finally {
+      if (identical(_ongoingInstall, installFuture)) {
+        _ongoingInstall = null;
+      }
+    }
+  }
+
+  Future<AppUpdateInstallResult> _installUpdateInternal(
     VersionCheckResult result, {
     bool allowFallbackToReleasePage = true,
     AppUpdateProgressCallback? onProgress,
@@ -122,19 +149,32 @@ class AppUpdateService {
     await updateDir.create(recursive: true);
 
     final apkPath = path.join(updateDir.path, 'lstocker-$version.apk');
+    var lastProgress = 0.0;
     await _dio.download(
       apkUrl,
       apkPath,
       deleteOnError: true,
       onReceiveProgress: (received, total) {
         if (total <= 0) {
-          _emitProgress(onProgress, 'アップデートをダウンロードしています...', null);
+          // total が不明なケースでも determinate 表示を維持して揺れを防ぐ。
+          _emitProgress(
+            onProgress,
+            'アップデートをダウンロードしています...',
+            lastProgress,
+          );
           return;
         }
 
-        final progress = received / total;
+        final progress = (received / total).clamp(0.0, 1.0);
+        if (progress >= lastProgress) {
+          lastProgress = progress;
+        }
         final percent = (progress * 100).clamp(0, 100).toStringAsFixed(0);
-        _emitProgress(onProgress, 'アップデートをダウンロードしています... $percent%', progress);
+        _emitProgress(
+          onProgress,
+          'アップデートをダウンロードしています... $percent%',
+          lastProgress,
+        );
       },
     );
     return apkPath;
@@ -192,6 +232,11 @@ class AppUpdateService {
     String message,
     double? progress,
   ) {
-    onProgress?.call(message, progress);
+    final normalized = progress == null
+        ? null
+        : progress.isFinite
+        ? progress.clamp(0.0, 1.0)
+        : null;
+    onProgress?.call(message, normalized);
   }
 }

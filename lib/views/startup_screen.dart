@@ -124,7 +124,8 @@ class _StartupScreenState extends State<StartupScreen> {
     debugPrint(
       '[Startup] cached update check resolved in ${sw.elapsedMilliseconds}ms',
     );
-    if (settingsProvider.autoCheckUpdateOnStartup) {
+    if (settingsProvider.autoCheckUpdateOnStartup &&
+        (cachedUpdateResult == null || !cachedUpdateResult.updateAvailable)) {
       _runUpdateCheckInBackground();
     }
 
