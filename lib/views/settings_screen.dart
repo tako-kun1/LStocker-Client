@@ -132,7 +132,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         return AlertDialog(
           title: const Text('確認'),
           content: const Text(
-            'DB内のデータ（商品・在庫・同期キュー）を削除して、最新CSVを再取得します。\nこの操作は取り消せません。実行しますか？',
+            'DB内の商品データと関連する同期キューを削除して、最新CSVを再取得します。\n（在庫データは保持されます）\nこの操作は取り消せません。実行しますか？',
           ),
           actions: [
             TextButton(
@@ -178,8 +178,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       setState(() {
         _csvImportSucceeded = result.success;
         _csvImportMessage = result.success
-            ? 'DBを初期化して最新CSVを取り込みました。${result.message}'
-            : 'DB初期化後のCSV取込に失敗しました。${result.message}';
+            ? '商品データをリセットして最新CSVを取り込みました。${result.message}'
+            : '商品データリセット後のCSV取込に失敗しました。${result.message}';
       });
 
       messenger.showSnackBar(
@@ -189,7 +189,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (!mounted) return;
       setState(() {
         _csvImportSucceeded = false;
-        _csvImportMessage = 'DB初期化とCSV取込でエラーが発生しました: $e';
+        _csvImportMessage = '商品データリセットとCSV取込でエラーが発生しました: $e';
       });
       messenger.showSnackBar(SnackBar(content: Text(_csvImportMessage!)));
     } finally {
@@ -600,8 +600,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         : const Icon(Icons.restart_alt),
                     label: Text(
                       _refreshingCsvFromScratch
-                          ? 'DB初期化＋CSV再取得中...'
-                          : 'DBデータ削除して最新CSVを取得する',
+                          ? '商品データリセット＋CSV再取得中...'
+                          : '商品データを削除して最新CSVを取得する',
                     ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Theme.of(context).colorScheme.error,

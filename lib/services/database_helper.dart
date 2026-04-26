@@ -545,9 +545,12 @@ class DatabaseHelper {
   Future<void> clearAllAppDataForCsvRefresh() async {
     final db = await database;
     await db.transaction((txn) async {
-      await txn.delete('inventories');
       await txn.delete('products');
-      await txn.delete('sync_queue');
+      await txn.delete(
+        'sync_queue',
+        where: 'entityType = ?',
+        whereArgs: ['product'],
+      );
     });
   }
 
