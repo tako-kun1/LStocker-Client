@@ -36,6 +36,7 @@ class InventoryPdfSaveResult {
 
 class InventoryPdfService {
   static final DateFormat _dateFormat = DateFormat('yyyy/MM/dd');
+  static final DateFormat _dateTimeFormat = DateFormat('yyyy/MM/dd HH:mm');
   static final DateFormat _fileDateFormat = DateFormat('yyyyMMdd_HHmmss');
 
   Future<InventoryPdfDataResult> buildInventoryPdfBytes(
@@ -54,15 +55,6 @@ class InventoryPdfService {
       );
       final generatedAt = DateTime.now();
       final fileName = 'inventory_status_${_fileDateFormat.format(generatedAt)}.pdf';
-
-      final rows = inventories.map((item) {
-        final productName = _stringValue(item['name'], fallback: '未登録商品');
-        final janCode = _stringValue(item['janCode'], fallback: '-');
-        final quantity = _stringValue(item['quantity'], fallback: '0');
-        final registrationDate = _formatDate(item['registrationDate']);
-        final expirationDate = _formatDate(item['expirationDate']);
-        return [productName, janCode, quantity, registrationDate, expirationDate];
-      }).toList(growable: false);
 
       pdf.addPage(
         pw.MultiPage(
@@ -85,17 +77,7 @@ class InventoryPdfService {
               child: pw.Text('出力日時: ${_dateFormat.format(generatedAt)}'),
             ),
             pw.SizedBox(height: 12),
-            pw.TableHelper.fromTextArray(
-              headers: const ['商品名', 'JAN', '数量', '登録日', '期限日'],
-              data: rows,
-              cellStyle: pw.TextStyle(fontSize: 10),
-              headerStyle: pw.TextStyle(
-                fontSize: 10,
-                fontWeight: pw.FontWeight.bold,
-              ),
-              headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
-              cellAlignment: pw.Alignment.centerLeft,
-            ),
+            _buildInventoryTable(inventories),
           ],
         ),
       );
@@ -127,6 +109,69 @@ class InventoryPdfService {
         bold: pw.Font.helveticaBold(),
       );
     }
+  }
+
+  pw.Widget _buildInventoryTable(List<Map<String, dynamic>> inventories) {
+    final headerTitles = const ['登録日時', '商品名', 'JANコード', '期限日', '在庫数', '概要'];
+
+    final tableRows = <pw.TableRow>[
+      pw.TableRow(
+        decoration: const pw.BoxDecoration(color: PdfColors.grey300),
+        children: headerTitles.map(_buildHeaderCell).toList(growable: false),
+      ),
+      ...inventories.map((item) {
+        final registrationDate = _formatDateTime(item['registrationDate']);
+        final productName = _stringValue(item['name'], fallback: '未登録商品');
+        final janCode = _stringValue(item['janCode'], fallback: '-');
+        final expirationDate = _formatDate(item['expirationDate']);
+        final quantity = _stringValue(item['quantity'], fallback: '0');
+
+        return pw.TableRow(
+          children: [
+            _buildDataCell(registrationDate),
+            _buildDataCell(productName),
+            _buildDataCell(janCode),
+            _buildDataCell(expirationDate),
+            _buildDataCell(quantity),
+            _buildDataCell('', minHeight: 26),
+          ],
+        );
+      }),
+    ];
+
+    return pw.Table(
+      border: pw.TableBorder.all(color: PdfColors.grey700, width: 0.6),
+      defaultVerticalAlignment: pw.TableCellVerticalAlignment.middle,
+      columnWidths: const {
+        0: pw.FlexColumnWidth(2.2),
+        1: pw.FlexColumnWidth(2.2),
+        2: pw.FlexColumnWidth(1.9),
+        3: pw.FlexColumnWidth(1.5),
+        4: pw.FlexColumnWidth(1.0),
+        5: pw.FlexColumnWidth(3.2),
+      },
+      children: tableRows,
+    );
+  }
+
+  pw.Widget _buildHeaderCell(String text) {
+    return pw.Container(
+      padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+      child: pw.Text(
+        text,
+        style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
+        textAlign: pw.TextAlign.center,
+      ),
+    );
+  }
+
+  pw.Widget _buildDataCell(String text, {double minHeight = 20}) {
+    return pw.Container(
+      alignment: pw.Alignment.centerLeft,
+      constraints: pw.BoxConstraints(minHeight: minHeight),
+      padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+      child: pw.Text(text, style: const pw.TextStyle(fontSize: 10)),
+    );
   }
 
   Future<InventoryPdfSaveResult> savePdfBytes({
@@ -166,6 +211,23 @@ class InventoryPdfService {
     }
 
     return _dateFormat.format(parsed);
+  }
+
+  String _formatDateTime(dynamic rawValue) {
+    if (rawValue == null) {
+      return '-';
+    }
+
+    if (rawValue is DateTime) {
+      return _dateTimeFormat.format(rawValue);
+    }
+
+    final parsed = DateTime.tryParse(rawValue.toString());
+    if (parsed == null) {
+      return '-';
+    }
+
+    return _dateTimeFormat.format(parsed);
   }
 
   String _stringValue(dynamic rawValue, {required String fallback}) {

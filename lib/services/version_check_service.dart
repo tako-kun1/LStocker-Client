@@ -165,7 +165,27 @@ class VersionCheckService {
 
     try {
       final map = jsonDecode(cache) as Map<String, dynamic>;
-      return VersionCheckResult.fromMap(map);
+      final cached = VersionCheckResult.fromMap(map);
+
+      // キャッシュは過去バージョン時点の判定なので、現在のアプリ版で再評価する。
+      final packageInfo = await PackageInfo.fromPlatform();
+      final currentVersion = _normalizeVersion(packageInfo.version);
+      final hasUpdate = _compareVersions(currentVersion, cached.latestVersion) < 0;
+      final isRequired = hasUpdate && cached.isRequired;
+
+      return VersionCheckResult(
+        updateAvailable: hasUpdate,
+        isRequired: isRequired,
+        currentVersion: currentVersion,
+        latestVersion: cached.latestVersion,
+        minSupportedVersion: cached.minSupportedVersion,
+        releaseNotes: cached.releaseNotes,
+        apkUrl: cached.apkUrl,
+        releasePageUrl: cached.releasePageUrl,
+        publishedAt: cached.publishedAt,
+        checkedAt: cached.checkedAt,
+        error: cached.error,
+      );
     } catch (_) {
       return null;
     }
