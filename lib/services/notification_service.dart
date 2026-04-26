@@ -29,17 +29,31 @@ class NotificationService {
       return;
     }
 
-    const androidSettings = AndroidInitializationSettings(
-      '@drawable/app_icon_drawe',
-    );
-    const settings = InitializationSettings(android: androidSettings);
-
-    await _plugin.initialize(settings: settings);
+    await _initializeWithPreferredIcon();
     await _createAndroidChannel();
     if (requestPermissions) {
       await _requestPermissions();
     }
     _initialized = true;
+  }
+
+  Future<void> _initializeWithPreferredIcon() async {
+    try {
+      const androidSettings = AndroidInitializationSettings(
+        _androidNotificationIcon,
+      );
+      const settings = InitializationSettings(android: androidSettings);
+      await _plugin.initialize(settings: settings);
+    } catch (_) {
+      // Keep app booting even if a custom icon cannot be resolved.
+      const fallbackAndroidSettings = AndroidInitializationSettings(
+        'launcher_icon',
+      );
+      const fallbackSettings = InitializationSettings(
+        android: fallbackAndroidSettings,
+      );
+      await _plugin.initialize(settings: fallbackSettings);
+    }
   }
 
   Future<void> syncNearExpirationNotifications(

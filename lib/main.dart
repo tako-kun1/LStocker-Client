@@ -26,9 +26,13 @@ void main() async {
     settingsProvider.loadSettings(),
     syncService.initialize(),
   ]);
-  await NotificationService().initialize(
-    requestPermissions: false,
-  );
+  try {
+    await NotificationService().initialize(
+      requestPermissions: false,
+    );
+  } catch (e) {
+    debugPrint('[Main] notification service initialize failed: $e');
+  }
   debugPrint('[Main] bootstrap completed in ${sw.elapsedMilliseconds}ms');
 
   // API クライアント初期化
