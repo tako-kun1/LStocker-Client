@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 
 class InventoryPdfDataResult {
   const InventoryPdfDataResult({
@@ -48,7 +49,9 @@ class InventoryPdfService {
     }
 
     try {
-      final pdf = pw.Document();
+      final pdf = pw.Document(
+        theme: await _buildJapaneseTheme(),
+      );
       final generatedAt = DateTime.now();
       final fileName = 'inventory_status_${_fileDateFormat.format(generatedAt)}.pdf';
 
@@ -66,17 +69,26 @@ class InventoryPdfService {
           pageFormat: PdfPageFormat.a4,
           margin: const pw.EdgeInsets.all(24),
           build: (context) => [
-            pw.Text(
-              '在庫状況一覧',
-              style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
+            pw.Align(
+              alignment: pw.Alignment.center,
+              child: pw.Text(
+                '在庫状況一覧',
+                style: pw.TextStyle(
+                  fontSize: 18,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
             ),
             pw.SizedBox(height: 6),
-            pw.Text('出力日時: ${_dateFormat.format(generatedAt)}'),
+            pw.Align(
+              alignment: pw.Alignment.centerRight,
+              child: pw.Text('出力日時: ${_dateFormat.format(generatedAt)}'),
+            ),
             pw.SizedBox(height: 12),
             pw.TableHelper.fromTextArray(
               headers: const ['商品名', 'JAN', '数量', '登録日', '期限日'],
               data: rows,
-              cellStyle: const pw.TextStyle(fontSize: 10),
+              cellStyle: pw.TextStyle(fontSize: 10),
               headerStyle: pw.TextStyle(
                 fontSize: 10,
                 fontWeight: pw.FontWeight.bold,
@@ -99,6 +111,20 @@ class InventoryPdfService {
       return InventoryPdfDataResult(
         success: false,
         message: 'PDF生成に失敗しました: $e',
+      );
+    }
+  }
+
+  Future<pw.ThemeData> _buildJapaneseTheme() async {
+    try {
+      final baseFont = await PdfGoogleFonts.iBMPlexSansJPRegular();
+      final boldFont = await PdfGoogleFonts.iBMPlexSansJPBold();
+      return pw.ThemeData.withFont(base: baseFont, bold: boldFont);
+    } catch (_) {
+      // Fallback when font download is unavailable.
+      return pw.ThemeData.withFont(
+        base: pw.Font.helvetica(),
+        bold: pw.Font.helveticaBold(),
       );
     }
   }
