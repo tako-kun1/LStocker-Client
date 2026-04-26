@@ -29,7 +29,7 @@ class InventoryPrintService {
 
       return const InventoryPrintResult(
         success: true,
-        message: '印刷画面を開きました。',
+        message: '印刷が完了しました。',
       );
     } catch (e) {
       return InventoryPrintResult(

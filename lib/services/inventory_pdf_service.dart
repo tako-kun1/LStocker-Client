@@ -128,14 +128,26 @@ class InventoryPdfService {
 
         return pw.TableRow(
           children: [
-            _buildDataCell(registrationDate),
+            _buildDataCell(
+              registrationDate,
+              alignment: pw.Alignment.center,
+              textAlign: pw.TextAlign.center,
+            ),
             _buildDataCell(productName),
-            _buildDataCell(janCode),
-            _buildDataCell(expirationDate),
+            _buildDataCell(
+              janCode,
+              alignment: pw.Alignment.center,
+              textAlign: pw.TextAlign.center,
+            ),
+            _buildDataCell(
+              expirationDate,
+              alignment: pw.Alignment.center,
+              textAlign: pw.TextAlign.center,
+            ),
             _buildDataCell(
               quantity,
-              alignment: pw.Alignment.centerRight,
-              textAlign: pw.TextAlign.right,
+              alignment: pw.Alignment.center,
+              textAlign: pw.TextAlign.center,
             ),
             _buildDataCell('', minHeight: 26),
           ],
