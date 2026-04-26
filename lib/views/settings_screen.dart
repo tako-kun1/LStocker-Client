@@ -358,106 +358,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              _buildSection(
-                context,
-                title: 'バックアップサーバー設定',
-                icon: Icons.cloud_upload_outlined,
-                children: [
-                  TextField(
-                    controller: _backupUrlController,
-                    decoration: const InputDecoration(
-                      labelText: 'バックアップサーバー URL',
-                      border: OutlineInputBorder(),
-                      hintText: 'http://192.168.1.100:8080',
-                    ),
-                    keyboardType: TextInputType.visiblePassword,
-                    autocorrect: false,
-                    enableSuggestions: false,
-                    onSubmitted: (v) => settings.setBackupServerUrl(v),
-                  ),
-                  const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    onPressed: _checkingBackupServer
-                        ? null
-                        : () => _checkBackupServerConnection(settings),
-                    icon: _checkingBackupServer
-                        ? const SizedBox(
-                            height: 18,
-                            width: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.wifi_find),
-                    label: Text(_checkingBackupServer ? '確認中...' : '接続確認'),
-                  ),
-                  if (_backupServerCheckMessage != null) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      _backupServerCheckMessage!,
-                      style: TextStyle(
-                        color: (_backupServerCheckSucceeded ?? false)
-                            ? Colors.green.shade700
-                            : Theme.of(context).colorScheme.error,
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 8),
-                  Text(
-                    '商品DBと在庫情報のバックアップ接続先として保存されます。'
-                    'バックアップ同期設定と手動同期はこの接続先を使用します。',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
-              ),
-              _buildSection(
-                context,
-                title: '通知設定',
-                icon: Icons.notifications_none,
-                children: [
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('プッシュ通知を有効にする'),
-                    value: settings.pushNotificationsEnabled,
-                    onChanged: (v) => settings.setPushNotificationsEnabled(v),
-                  ),
-                ],
-              ),
-              _buildSection(
-                context,
-                title: 'バーコード読取設定',
-                icon: Icons.qr_code_scanner,
-                children: [
-                  DropdownButtonFormField<String>(
-                    initialValue: settings.barcodeScanMethod,
-                    decoration: const InputDecoration(
-                      labelText: '読取方式',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: const [
-                      DropdownMenuItem(
-                        value: SettingsProvider.barcodeScanMethodCamera,
-                        child: Text('カメラ読取'),
-                      ),
-                      DropdownMenuItem(
-                        value: SettingsProvider.barcodeScanMethodDeviceReader,
-                        child: Text('端末スキャナ読取 (Zebra EMDK)'),
-                      ),
-                    ],
-                    onChanged: (value) {
-                      if (value != null) {
-                        settings.setBarcodeScanMethod(value);
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    settings.barcodeScanMethod ==
-                            SettingsProvider.barcodeScanMethodDeviceReader
-                        ? 'Zebra端末のスキャナユニットを直接使用します。'
-                        : '端末カメラを使ってバーコードを読み取ります。',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
-              ),
               if (AppConfig.enableProductKeyAuth) ...[
                 _buildSection(
                   context,
@@ -610,6 +510,56 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               _buildSection(
                 context,
+                title: '通知設定',
+                icon: Icons.notifications_none,
+                children: [
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('プッシュ通知を有効にする'),
+                    value: settings.pushNotificationsEnabled,
+                    onChanged: (v) => settings.setPushNotificationsEnabled(v),
+                  ),
+                ],
+              ),
+              _buildSection(
+                context,
+                title: 'バーコード読取設定',
+                icon: Icons.qr_code_scanner,
+                children: [
+                  DropdownButtonFormField<String>(
+                    initialValue: settings.barcodeScanMethod,
+                    decoration: const InputDecoration(
+                      labelText: '読取方式',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                        value: SettingsProvider.barcodeScanMethodCamera,
+                        child: Text('カメラ読取'),
+                      ),
+                      DropdownMenuItem(
+                        value: SettingsProvider.barcodeScanMethodDeviceReader,
+                        child: Text('端末スキャナ読取 (Zebra EMDK)'),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        settings.setBarcodeScanMethod(value);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    settings.barcodeScanMethod ==
+                            SettingsProvider.barcodeScanMethodDeviceReader
+                        ? 'Zebra端末のスキャナユニットを直接使用します。'
+                        : '端末カメラを使ってバーコードを読み取ります。',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+              _buildSection(
+                context,
                 title: 'CSV商品取込設定',
                 icon: Icons.file_download_outlined,
                 children: [
@@ -669,6 +619,56 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ),
                   ],
+                ],
+              ),
+              _buildSection(
+                context,
+                title: 'バックアップサーバー設定',
+                icon: Icons.cloud_upload_outlined,
+                children: [
+                  TextField(
+                    controller: _backupUrlController,
+                    decoration: const InputDecoration(
+                      labelText: 'バックアップサーバー URL',
+                      border: OutlineInputBorder(),
+                      hintText: 'http://192.168.1.100:8080',
+                    ),
+                    keyboardType: TextInputType.visiblePassword,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    onSubmitted: (v) => settings.setBackupServerUrl(v),
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: _checkingBackupServer
+                        ? null
+                        : () => _checkBackupServerConnection(settings),
+                    icon: _checkingBackupServer
+                        ? const SizedBox(
+                            height: 18,
+                            width: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.wifi_find),
+                    label: Text(_checkingBackupServer ? '確認中...' : '接続確認'),
+                  ),
+                  if (_backupServerCheckMessage != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      _backupServerCheckMessage!,
+                      style: TextStyle(
+                        color: (_backupServerCheckSucceeded ?? false)
+                            ? Colors.green.shade700
+                            : Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                  Text(
+                    '商品DBと在庫情報のバックアップ接続先として保存されます。'
+                    'バックアップ同期設定と手動同期はこの接続先を使用します。',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
                 ],
               ),
               _buildSection(
