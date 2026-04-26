@@ -14,6 +14,7 @@ import '../services/csv_product_import_scheduler.dart';
 import '../services/inventory_backup_scheduler.dart';
 import '../services/offline_db_service.dart';
 import '../services/product_key_service.dart';
+import '../services/startup_permission_service.dart';
 import '../services/version_check_service.dart';
 import 'home_screen.dart';
 import 'license_activation_screen.dart';
@@ -30,6 +31,8 @@ class _StartupScreenState extends State<StartupScreen> {
   final VersionCheckService _versionCheckService = VersionCheckService();
   final AppUpdateService _appUpdateService = AppUpdateService();
   final ProductKeyService _productKeyService = ProductKeyService();
+  final StartupPermissionService _startupPermissionService =
+      StartupPermissionService();
   String? _updateProgressMessage;
   double? _updateProgressValue;
 
@@ -47,6 +50,12 @@ class _StartupScreenState extends State<StartupScreen> {
     final inventoryProvider = context.read<InventoryProvider>();
     final settingsProvider = context.read<SettingsProvider>();
     debugPrint('[Startup] initialize started');
+
+    try {
+      await _startupPermissionService.requestPermissionsIfFirstLaunchOfVersion();
+    } catch (e) {
+      debugPrint('[Startup] startup permission request failed: $e');
+    }
 
     // 起動体験を優先し、独立タスクは先に並列で開始する。
     final legacyPromptFuture = _offlineDbService

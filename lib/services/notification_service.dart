@@ -20,7 +20,7 @@ class NotificationService {
 
   bool _initialized = false;
 
-  Future<void> initialize({bool requestPermissions = true}) async {
+  Future<void> initialize({bool requestPermissions = false}) async {
     if (_initialized) {
       if (requestPermissions) {
         await _requestPermissions();
@@ -44,7 +44,7 @@ class NotificationService {
   Future<void> syncNearExpirationNotifications(
     List<Map<String, dynamic>> inventories,
   ) async {
-    await initialize();
+    await initialize(requestPermissions: false);
 
     final prefs = await SharedPreferences.getInstance();
     final enabled = prefs.getBool('pushNotificationsEnabled') ?? true;

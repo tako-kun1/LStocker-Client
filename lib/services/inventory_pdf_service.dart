@@ -74,7 +74,7 @@ class InventoryPdfService {
             pw.SizedBox(height: 6),
             pw.Align(
               alignment: pw.Alignment.centerRight,
-              child: pw.Text('出力日時: ${_dateFormat.format(generatedAt)}'),
+              child: pw.Text('印刷日時: ${_dateTimeFormat.format(generatedAt)}'),
             ),
             pw.SizedBox(height: 12),
             _buildInventoryTable(inventories),
@@ -132,7 +132,11 @@ class InventoryPdfService {
             _buildDataCell(productName),
             _buildDataCell(janCode),
             _buildDataCell(expirationDate),
-            _buildDataCell(quantity),
+            _buildDataCell(
+              quantity,
+              alignment: pw.Alignment.centerRight,
+              textAlign: pw.TextAlign.right,
+            ),
             _buildDataCell('', minHeight: 26),
           ],
         );
@@ -165,12 +169,21 @@ class InventoryPdfService {
     );
   }
 
-  pw.Widget _buildDataCell(String text, {double minHeight = 20}) {
+  pw.Widget _buildDataCell(
+    String text, {
+    double minHeight = 20,
+    pw.Alignment alignment = pw.Alignment.centerLeft,
+    pw.TextAlign textAlign = pw.TextAlign.left,
+  }) {
     return pw.Container(
-      alignment: pw.Alignment.centerLeft,
+      alignment: alignment,
       constraints: pw.BoxConstraints(minHeight: minHeight),
       padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-      child: pw.Text(text, style: const pw.TextStyle(fontSize: 10)),
+      child: pw.Text(
+        text,
+        style: const pw.TextStyle(fontSize: 8),
+        textAlign: textAlign,
+      ),
     );
   }
 

@@ -27,7 +27,7 @@ void main() async {
     syncService.initialize(),
   ]);
   await NotificationService().initialize(
-    requestPermissions: settingsProvider.pushNotificationsEnabled,
+    requestPermissions: false,
   );
   debugPrint('[Main] bootstrap completed in ${sw.elapsedMilliseconds}ms');
 
