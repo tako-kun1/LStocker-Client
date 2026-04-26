@@ -13,6 +13,17 @@ class NotificationScreen extends StatefulWidget {
 
 class _NotificationScreenState extends State<NotificationScreen> {
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      context.read<InventoryProvider>().markNearExpirationNotificationsAsRead();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final df = DateFormat('yyyy/MM/dd');
 

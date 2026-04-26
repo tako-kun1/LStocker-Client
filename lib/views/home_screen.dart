@@ -97,7 +97,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                   showNotificationBadge:
-                      inventoryProvider.nearExpirationNotificationCount > 0,
+                      inventoryProvider.hasUnreadNearExpirationNotifications,
                 );
               },
             ),

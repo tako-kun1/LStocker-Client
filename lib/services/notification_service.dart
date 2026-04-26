@@ -14,6 +14,7 @@ class NotificationService {
   static const String _lastNotificationSignatureKey =
       'lastNearExpirationNotificationSignature';
   static const int _summaryNotificationId = 1001;
+  static const String _androidNotificationIcon = 'app_icon_drawe';
 
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
@@ -29,7 +30,7 @@ class NotificationService {
     }
 
     const androidSettings = AndroidInitializationSettings(
-      '@mipmap/launcher_icon',
+      '@drawable/app_icon_drawe',
     );
     const settings = InitializationSettings(android: androidSettings);
 
@@ -81,6 +82,7 @@ class NotificationService {
           _channelId,
           _channelName,
           channelDescription: _channelDescription,
+          icon: _androidNotificationIcon,
           importance: Importance.max,
           priority: Priority.high,
           ticker: 'inventory_alert',

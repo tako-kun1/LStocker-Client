@@ -1,15 +1,20 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/inventory.dart';
 import '../services/database_helper.dart';
 import '../services/inventory_backup_scheduler.dart';
 import '../services/notification_service.dart';
 
 class InventoryProvider with ChangeNotifier {
+  static const String _lastSeenNotificationSignatureKey =
+      'lastSeenNearExpirationNotificationSignature';
+
   List<Inventory> _inventories = [];
   List<Map<String, dynamic>> _inventoriesWithProduct = [];
   bool _isLoading = false;
+  bool _hasUnreadNearExpirationNotifications = false;
 
   final DatabaseHelper _dbHelper = DatabaseHelper();
 
@@ -17,6 +22,8 @@ class InventoryProvider with ChangeNotifier {
   List<Map<String, dynamic>> get inventoriesWithProduct =>
       _inventoriesWithProduct;
   bool get isLoading => _isLoading;
+    bool get hasUnreadNearExpirationNotifications =>
+      _hasUnreadNearExpirationNotifications;
   int get nearExpirationNotificationCount =>
       getNearExpirationInventories().length;
 
@@ -39,6 +46,15 @@ class InventoryProvider with ChangeNotifier {
       } catch (e) {
         debugPrint('[InventoryProvider] notification sync failed: $e');
       }
+
+      final notifications = getNearExpirationInventories();
+      final currentSignature = _buildNotificationSignature(notifications);
+      final prefs = await SharedPreferences.getInstance();
+      final seenSignature =
+          prefs.getString(_lastSeenNotificationSignatureKey) ?? '';
+      _hasUnreadNearExpirationNotifications =
+          notifications.isNotEmpty && currentSignature != seenSignature;
+
       debugPrint(
         '[InventoryProvider] loaded ${_inventories.length} inventories in ${sw.elapsedMilliseconds}ms',
       );
@@ -61,6 +77,34 @@ class InventoryProvider with ChangeNotifier {
       final diff = notificationDate.difference(now).inDays;
       return diff <= 3;
     }).toList();
+  }
+
+  Future<void> markNearExpirationNotificationsAsRead() async {
+    final notifications = getNearExpirationInventories();
+    final currentSignature = _buildNotificationSignature(notifications);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_lastSeenNotificationSignatureKey, currentSignature);
+
+    if (_hasUnreadNearExpirationNotifications) {
+      _hasUnreadNearExpirationNotifications = false;
+      notifyListeners();
+    }
+  }
+
+  String _buildNotificationSignature(List<Map<String, dynamic>> notifications) {
+    if (notifications.isEmpty) {
+      return '';
+    }
+
+    final keys = notifications.map((item) {
+      final id = item['id']?.toString() ?? '';
+      final expiration = item['expirationDate']?.toString() ?? '';
+      final salesPeriod = item['salesPeriod']?.toString() ?? '';
+      return '$id|$expiration|$salesPeriod';
+    }).toList()
+      ..sort();
+
+    return keys.join('||');
   }
 
   Future<void> addInventory(Inventory inventory) async {
