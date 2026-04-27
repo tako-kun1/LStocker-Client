@@ -33,7 +33,7 @@ android {
         applicationId = "cloud.nazono.lstocker"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = 22 // Android 5.1以上
+        minSdk = 29 // Android 10以上
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
