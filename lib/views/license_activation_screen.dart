@@ -181,7 +181,7 @@ class _LicenseActivationScreenState extends State<LicenseActivationScreen> {
                           labelText: 'プロダクトキー',
                           hintText: 'XXXX-XXXX-XXXX-XXXX',
                         ),
-                        keyboardType: TextInputType.visiblePassword,
+                        keyboardType: TextInputType.text,
                         textCapitalization: TextCapitalization.characters,
                         autocorrect: false,
                         enableSuggestions: false,
