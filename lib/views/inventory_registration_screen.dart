@@ -346,6 +346,22 @@ class _DateInputFormatter extends TextInputFormatter {
         })
         .replaceAll(RegExp(r'[^0-9]'), '');
 
+    // 月の先頭文字が2~9の場合、自動で0を補完する
+    if (text.length >= 5) {
+      final m1 = text[4];
+      if (['2', '3', '4', '5', '6', '7', '8', '9'].contains(m1)) {
+        text = text.substring(0, 4) + '0' + text.substring(4);
+      }
+    }
+
+    // 日の先頭文字が4~9の場合、自動で0を補完する
+    if (text.length >= 7) {
+      final d1 = text[6];
+      if (['4', '5', '6', '7', '8', '9'].contains(d1)) {
+        text = text.substring(0, 6) + '0' + text.substring(6);
+      }
+    }
+
     if (text.length > 8) {
       text = text.substring(0, 8);
     }

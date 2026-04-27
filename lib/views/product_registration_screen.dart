@@ -226,11 +226,9 @@ class _ProductRegistrationScreenState extends State<ProductRegistrationScreen> {
                     labelText: 'DEPT番号',
                     hintText: '数字で入力 (例: 1)',
                   ),
-                  keyboardType: TextInputType.none,
+                  keyboardType: TextInputType.number,
                   textInputAction: TextInputAction.none,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  onTap: () =>
-                      SystemChannels.textInput.invokeMethod('TextInput.hide'),
                   validator: (v) {
                     if (v == null || v.isEmpty) return '入力してください';
                     final val = int.tryParse(v);
