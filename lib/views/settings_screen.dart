@@ -383,6 +383,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     const SizedBox(height: 12),
                     OutlinedButton.icon(
                       onPressed: () async {
+                        final shouldProceed = await showDialog<bool>(
+                          context: context,
+                          builder: (dialogContext) {
+                            return AlertDialog(
+                              title: const Text('確認'),
+                              content: const Text(
+                                'プロダクトキーを再登録しますか？\n\n'
+                                '再登録を行うと、現在の端末内のデータが新しいキーに関連付けられたバックアップデータで上書きされる可能性があります。\n'
+                                'この操作は取り消せません。本当に実行しますか？',
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () =>
+                                      Navigator.of(dialogContext).pop(false),
+                                  child: const Text('キャンセル'),
+                                ),
+                                _LongPressConfirmButton(
+                                  onConfirmed: () =>
+                                      Navigator.of(dialogContext).pop(true),
+                                ),
+                              ],
+                            );
+                          },
+                        );
+
+                        if (shouldProceed != true || !mounted) {
+                          return;
+                        }
+
                         final result = await Navigator.of(context).push<bool>(
                           MaterialPageRoute(
                             builder: (_) => const LicenseActivationScreen(),
@@ -881,6 +910,88 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ...children,
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _LongPressConfirmButton extends StatefulWidget {
+  final VoidCallback onConfirmed;
+  const _LongPressConfirmButton({required this.onConfirmed});
+
+  @override
+  State<_LongPressConfirmButton> createState() =>
+      _LongPressConfirmButtonState();
+}
+
+class _LongPressConfirmButtonState extends State<_LongPressConfirmButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 5),
+    );
+    _controller.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        widget.onConfirmed();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => _controller.forward(),
+      onTapUp: (_) => _controller.reverse(),
+      onTapCancel: () => _controller.reverse(),
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, child) {
+          final colorScheme = Theme.of(context).colorScheme;
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(
+              color: colorScheme.error,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            clipBehavior: Clip.hardEdge,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                if (_controller.value > 0)
+                  Positioned.fill(
+                    child: FractionallySizedBox(
+                      alignment: Alignment.centerLeft,
+                      widthFactor: _controller.value,
+                      child: Container(
+                        color: colorScheme.onError.withValues(alpha: 0.3),
+                      ),
+                    ),
+                  ),
+                Text(
+                  _controller.isAnimating &&
+                          _controller.status == AnimationStatus.forward
+                      ? '長押し中...'
+                      : '5秒長押しで実行',
+                  style: TextStyle(
+                    color: colorScheme.onError,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
