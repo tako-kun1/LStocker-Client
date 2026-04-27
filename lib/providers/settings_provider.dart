@@ -4,8 +4,7 @@ import '../services/api_client.dart';
 import '../services/notification_service.dart';
 
 class SettingsProvider with ChangeNotifier {
-  static const String barcodeScanMethodCamera = 'camera';
-  static const String barcodeScanMethodDeviceReader = 'device_reader';
+
   static const String backupTimingManual = 'Manual';
   static const String backupTimingOnStartup = 'On Startup';
   static const String backupTimingEveryHour = 'Every Hour';
@@ -15,7 +14,7 @@ class SettingsProvider with ChangeNotifier {
   String _backupServerUrl = '';
   bool _pushNotificationsEnabled = true;
   String _syncTiming = backupTimingManual;
-  String _barcodeScanMethod = barcodeScanMethodCamera;
+
   bool _autoCheckUpdateOnStartup = true;
   int? _userId;
   String? _username;
@@ -24,7 +23,7 @@ class SettingsProvider with ChangeNotifier {
   String get backupServerUrl => _backupServerUrl;
   bool get pushNotificationsEnabled => _pushNotificationsEnabled;
   String get syncTiming => _syncTiming;
-  String get barcodeScanMethod => _barcodeScanMethod;
+
   bool get autoCheckUpdateOnStartup => _autoCheckUpdateOnStartup;
   int? get userId => _userId;
   String? get username => _username;
@@ -39,9 +38,7 @@ class SettingsProvider with ChangeNotifier {
     _pushNotificationsEnabled =
         prefs.getBool('pushNotificationsEnabled') ?? true;
     _syncTiming = _normalizeBackupTiming(prefs.getString('syncTiming'));
-    _barcodeScanMethod = _normalizeBarcodeScanMethod(
-      prefs.getString('barcodeScanMethod'),
-    );
+
     _autoCheckUpdateOnStartup =
         prefs.getBool('autoCheckUpdateOnStartup') ?? true;
 
@@ -80,12 +77,7 @@ class SettingsProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> setBarcodeScanMethod(String method) async {
-    _barcodeScanMethod = _normalizeBarcodeScanMethod(method);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('barcodeScanMethod', _barcodeScanMethod);
-    notifyListeners();
-  }
+
 
   Future<void> setAutoCheckUpdateOnStartup(bool enabled) async {
     _autoCheckUpdateOnStartup = enabled;
@@ -123,12 +115,7 @@ class SettingsProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  String _normalizeBarcodeScanMethod(String? method) {
-    if (method == barcodeScanMethodDeviceReader) {
-      return barcodeScanMethodDeviceReader;
-    }
-    return barcodeScanMethodCamera;
-  }
+
 
   String _normalizeBackupTiming(String? timing) {
     switch (timing) {

@@ -87,17 +87,14 @@ class _InventoryRegistrationScreenState
   }
 
   Future<void> _scanBarcode() async {
-    final settings = context.read<SettingsProvider>();
-    final result = await Navigator.push<String>(
+    final result = await Navigator.push<ScanResult>(
       context,
       MaterialPageRoute(builder: (_) => const BarcodeScannerScreen()),
     );
     if (result != null) {
-      final normalized =
-          settings.barcodeScanMethod ==
-              SettingsProvider.barcodeScanMethodDeviceReader
-          ? _normalizeJan(result)
-          : _normalizeJanFromCamera(result);
+      final normalized = result.isFromCamera
+          ? _normalizeJanFromCamera(result.rawValue)
+          : _normalizeJan(result.rawValue);
       _janController.text = normalized;
       _janController.selection = TextSelection.collapsed(
         offset: normalized.length,

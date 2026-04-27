@@ -78,18 +78,15 @@ class _ProductRegistrationScreenState extends State<ProductRegistrationScreen> {
   }
 
   Future<void> _scanBarcode() async {
-    final settings = context.read<SettingsProvider>();
     final navigator = Navigator.of(context);
-    final result = await navigator.push<String>(
+    final result = await navigator.push<ScanResult>(
       MaterialPageRoute(builder: (_) => const BarcodeScannerScreen()),
     );
     if (!mounted) return;
     if (result != null) {
-      final normalized =
-          settings.barcodeScanMethod ==
-              SettingsProvider.barcodeScanMethodDeviceReader
-          ? _normalizeJan(result)
-          : _normalizeJanFromCamera(result);
+      final normalized = result.isFromCamera
+          ? _normalizeJanFromCamera(result.rawValue)
+          : _normalizeJan(result.rawValue);
       setState(() {
         _janController.text = normalized;
         _janController.selection = TextSelection.collapsed(

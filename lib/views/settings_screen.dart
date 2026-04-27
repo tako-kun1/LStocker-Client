@@ -550,43 +550,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ],
               ),
-              _buildSection(
-                context,
-                title: 'バーコード読取設定',
-                icon: Icons.qr_code_scanner,
-                children: [
-                  DropdownButtonFormField<String>(
-                    initialValue: settings.barcodeScanMethod,
-                    decoration: const InputDecoration(
-                      labelText: '読取方式',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: const [
-                      DropdownMenuItem(
-                        value: SettingsProvider.barcodeScanMethodCamera,
-                        child: Text('カメラ読取'),
-                      ),
-                      DropdownMenuItem(
-                        value: SettingsProvider.barcodeScanMethodDeviceReader,
-                        child: Text('端末スキャナ読取 (Zebra EMDK)'),
-                      ),
-                    ],
-                    onChanged: (value) {
-                      if (value != null) {
-                        settings.setBarcodeScanMethod(value);
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    settings.barcodeScanMethod ==
-                            SettingsProvider.barcodeScanMethodDeviceReader
-                        ? 'Zebra端末のスキャナユニットを直接使用します。'
-                        : '端末カメラを使ってバーコードを読み取ります。',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
-              ),
+
               _buildSection(
                 context,
                 title: 'CSV商品取込設定',
